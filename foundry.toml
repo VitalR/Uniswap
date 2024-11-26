@@ -1,7 +1,26 @@
 [profile.default]
-src = 'src'
-out = 'out'
-test = 'test'
-libs = ['lib']
+src = "src"
+out = "out"
+libs = ["lib"]
+gas_reports_ignore = ["test", "script"]
 
-# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "@openzeppelin/=lib/openzeppelin-contracts/contracts/",
+    "@solmate/=lib/solmate/src/",
+]
+
+solc = "0.8.25"
+optimizer = true
+optimizer_runs = 10000
+
+[fmt]
+tab_width = 4
+line_length = 120
+bracket_spacing = true
+int_types = "long"
+quote_style = "double"
+wrap_comments = true
+number_underscore = "thousands"
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
