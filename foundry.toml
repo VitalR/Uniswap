@@ -8,7 +8,8 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
     "@openzeppelin/=lib/openzeppelin-contracts/contracts/",
     "@solmate/=lib/solmate/src/",
-    "@prb-math/=lib/prb-math/src/"
+    "@prb-math/=lib/prb-math/src/",
+    "abdk-math/=lib/abdk-libraries-solidity/"
 ]
 
 solc = "0.8.25"
