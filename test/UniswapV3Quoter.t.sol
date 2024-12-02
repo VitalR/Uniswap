@@ -5,19 +5,21 @@ import { Test, stdError } from "forge-std/Test.sol";
 
 import { UniswapV3Quoter } from "src/UniswapV3Quoter.sol";
 import { UniswapV3Pool, IERC20 } from "src/UniswapV3Pool.sol";
-import { UniswapV3Manager } from "src/UniswapV3Manager.sol";
-import { ERC20Mintable } from "test/mocks/MintableERC20.sol";
+import { UniswapV3Manager, IUniswapV3Manager } from "src/UniswapV3Manager.sol";
+import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
 
-contract UniswapV3QuoterTest is Test {
-    ERC20Mintable token0;
-    ERC20Mintable token1;
+import "./TestUtils.sol";
+
+contract UniswapV3QuoterTest is Test, TestUtils {
+    ERC20Mock token0;
+    ERC20Mock token1;
     UniswapV3Pool pool;
     UniswapV3Manager manager;
     UniswapV3Quoter quoter;
 
     function setUp() public {
-        token0 = new ERC20Mintable("Ether", "ETH", 18);
-        token1 = new ERC20Mintable("USDC", "USDC", 18);
+        token0 = new ERC20Mock("Ether", "ETH");
+        token1 = new ERC20Mock("USDC", "USDC");
 
         uint256 wethBalance = 100 ether;
         uint256 usdcBalance = 1_000_000 ether;
@@ -25,69 +27,128 @@ contract UniswapV3QuoterTest is Test {
         token0.mint(address(this), wethBalance);
         token1.mint(address(this), usdcBalance);
 
-        pool = new UniswapV3Pool(address(token0), address(token1), 5_602_277_097_478_614_198_912_276_234_240, 85_176);
+        pool = new UniswapV3Pool(
+            address(token0),
+            address(token1),
+            sqrtP(5000),
+            tick(5000)
+        );
 
         manager = new UniswapV3Manager();
 
         token0.approve(address(manager), wethBalance);
         token1.approve(address(manager), usdcBalance);
 
-        int24 lowerTick = 84_222;
-        int24 upperTick = 86_129;
-        uint128 liquidity = 1_517_882_343_751_509_868_544;
-        bytes memory extra = encodeExtra(address(token0), address(token1), address(this));
-
-        manager.mint(address(pool), lowerTick, upperTick, liquidity, extra);
+        manager.mint(
+            IUniswapV3Manager.MintParams({
+                poolAddress: address(pool),
+                lowerTick: tick(4545),
+                upperTick: tick(5500),
+                amount0Desired: 1 ether,
+                amount1Desired: 5000 ether,
+                amount0Min: 0,
+                amount1Min: 0
+            })
+        );
 
         quoter = new UniswapV3Quoter();
     }
 
-    function test_Quote_USDCforETH() public {
-        (uint256 amountOut, uint256 sqrtPriceX96After, int24 tickAfter) = quoter.quote(
-            UniswapV3Quoter.QuoteParams({ pool: address(pool), amountIn: 0.01337 ether, zeroForOne: true })
+    function testQuoteUSDCforETH() public {
+        (uint256 amountOut, uint160 sqrtPriceX96After, int24 tickAfter) = quoter
+            .quote(
+                UniswapV3Quoter.QuoteParams({
+                    pool: address(pool),
+                    amountIn: 0.01337 ether,
+                    sqrtPriceLimitX96: sqrtP(4993),
+                    zeroForOne: true
+                })
+            );
+
+        assertEq(amountOut, 66.807123823853842027 ether, "invalid amountOut");
+        assertEq(
+            sqrtPriceX96After,
+            5598737223630966236662554421688,
+            "invalid sqrtPriceX96After"
+        );
+        assertEq(tickAfter, 85163, "invalid tickAFter");
+    }
+
+    function testQuoteETHforUSDC() public {
+        (uint256 amountOut, uint160 sqrtPriceX96After, int24 tickAfter) = quoter
+            .quote(
+                UniswapV3Quoter.QuoteParams({
+                    pool: address(pool),
+                    amountIn: 42 ether,
+                    sqrtPriceLimitX96: sqrtP(5005),
+                    zeroForOne: false
+                })
+            );
+
+        assertEq(amountOut, 0.008396874645169943 ether, "invalid amountOut");
+        assertEq(
+            sqrtPriceX96After,
+            5604415652688968742392013927525,
+            "invalid sqrtPriceX96After"
+        );
+        assertEq(tickAfter, 85183, "invalid tickAFter");
+    }
+
+    function testQuoteAndSwapUSDCforETH() public {
+        uint256 amountIn = 0.01337 ether;
+        (uint256 amountOut, , ) = quoter.quote(
+            UniswapV3Quoter.QuoteParams({
+                pool: address(pool),
+                amountIn: amountIn,
+                sqrtPriceLimitX96: sqrtP(4993),
+                zeroForOne: true
+            })
         );
 
-        assertEq(amountOut, 66.808388890199406685 ether, "invalid amountOut");
-        assertEq(sqrtPriceX96After, 5_598_789_932_670_288_701_514_545_755_210, "invalid sqrtPriceX96After");
-        assertEq(tickAfter, 85_163, "invalid tickAfter");
-    }
+        bytes memory extra = encodeExtra(
+            address(token0),
+            address(token1),
+            address(this)
+        );
 
-    function test_Quote_ETHforUSDC() public {
-        (uint256 amountOut, uint256 sqrtPriceX96After, int24 tickAfter) =
-            quoter.quote(UniswapV3Quoter.QuoteParams({ pool: address(pool), amountIn: 42 ether, zeroForOne: false }));
-
-        assertEq(amountOut, 0.008396714242162445 ether, "invalid amountOut");
-        assertEq(sqrtPriceX96After, 5_604_469_350_942_327_889_444_743_441_197, "invalid sqrtPriceX96After");
-        assertEq(tickAfter, 85_184, "invalid tickAfter");
-    }
-
-    function test_QuoteAndSwap_USDCforETH() public {
-        uint256 amountIn = 0.01337 ether;
-        (uint256 amountOut,,) =
-            quoter.quote(UniswapV3Quoter.QuoteParams({ pool: address(pool), amountIn: amountIn, zeroForOne: true }));
-
-        bytes memory extra = encodeExtra(address(token0), address(token1), address(this));
-
-        (int256 amount0Delta, int256 amount1Delta) = manager.swap(address(pool), true, amountIn, extra);
+        (int256 amount0Delta, int256 amount1Delta) = manager.swap(
+            address(pool),
+            true,
+            amountIn,
+            sqrtP(4993),
+            extra
+        );
 
         assertEq(uint256(amount0Delta), amountIn, "invalid amount0Delta");
         assertEq(uint256(-amount1Delta), amountOut, "invalid amount1Delta");
     }
 
-    function test_QuoteAndSwap_ETHforUSDC() public {
+    function testQuoteAndSwapETHforUSDC() public {
         uint256 amountIn = 55 ether;
-        (uint256 amountOut,,) =
-            quoter.quote(UniswapV3Quoter.QuoteParams({ pool: address(pool), amountIn: amountIn, zeroForOne: false }));
+        (uint256 amountOut, , ) = quoter.quote(
+            UniswapV3Quoter.QuoteParams({
+                pool: address(pool),
+                amountIn: amountIn,
+                sqrtPriceLimitX96: sqrtP(5010),
+                zeroForOne: false
+            })
+        );
 
-        bytes memory extra = encodeExtra(address(token0), address(token1), address(this));
+        bytes memory extra = encodeExtra(
+            address(token0),
+            address(token1),
+            address(this)
+        );
 
-        (int256 amount0Delta, int256 amount1Delta) = manager.swap(address(pool), false, amountIn, extra);
+        (int256 amount0Delta, int256 amount1Delta) = manager.swap(
+            address(pool),
+            false,
+            amountIn,
+            sqrtP(5010),
+            extra
+        );
 
         assertEq(uint256(-amount0Delta), amountOut, "invalid amount0Delta");
         assertEq(uint256(amount1Delta), amountIn, "invalid amount1Delta");
-    }
-
-    function encodeExtra(address _token0, address _token1, address _payer) internal pure returns (bytes memory) {
-        return abi.encode(UniswapV3Pool.CallbackData({ token0: _token0, token1: _token1, payer: _payer }));
     }
 }
