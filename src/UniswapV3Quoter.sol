@@ -2,6 +2,7 @@
 pragma solidity 0.8.25;
 
 import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
+import { TickMath } from "./libraries/TickMath.sol";
 
 /// @title UniswapV3Quoter
 /// @notice A contract for quoting swap information from a Uniswap V3 pool.
@@ -9,6 +10,7 @@ contract UniswapV3Quoter {
     struct QuoteParams {
         address pool; // Address of the Uniswap V3 pool contract.
         uint256 amountIn; // Input amount for the swap.
+        uint160 sqrtPriceLimitX96;
         bool zeroForOne; // If true, token0 is the input, otherwise token1 is the input.
     }
 
@@ -21,8 +23,15 @@ contract UniswapV3Quoter {
         public
         returns (uint256 amountOut, uint160 sqrtPriceX96After, int24 tickAfter)
     {
-        try IUniswapV3Pool(params.pool).swap(address(this), params.zeroForOne, params.amountIn, abi.encode(params.pool))
-        { } catch (bytes memory reason) {
+        try IUniswapV3Pool(params.pool).swap(
+            address(this),
+            params.zeroForOne,
+            params.amountIn,
+            params.sqrtPriceLimitX96 == 0
+                ? (params.zeroForOne ? TickMath.MIN_SQRT_RATIO + 1 : TickMath.MAX_SQRT_RATIO - 1)
+                : params.sqrtPriceLimitX96,
+            abi.encode(params.pool)
+        ) { } catch (bytes memory reason) {
             return abi.decode(reason, (uint256, uint160, int24));
         }
     }

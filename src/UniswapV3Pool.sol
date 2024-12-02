@@ -2,6 +2,7 @@
 pragma solidity 0.8.25;
 
 import { IERC20 } from "./interfaces/IERC20.sol";
+import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
 import { IUniswapV3MintCallback } from "./interfaces/IUniswapV3MintCallback.sol";
 import { IUniswapV3SwapCallback } from "./interfaces/IUniswapV3SwapCallback.sol";
 
@@ -13,7 +14,7 @@ import { Tick } from "./libraries/Tick.sol";
 import { TickMath } from "./libraries/TickMath.sol";
 import { TickBitmap } from "./libraries/TickBitmap.sol";
 
-contract UniswapV3Pool {
+contract UniswapV3Pool is IUniswapV3Pool {
     using Tick for mapping(int24 => Tick.Info);
     using TickBitmap for mapping(int16 => uint256);
     using Position for mapping(bytes32 => Position.Info);
@@ -39,22 +40,13 @@ contract UniswapV3Pool {
 
     Slot0 public slot0;
 
-    // The extra data to the callbacks, we need to pass it to mint and swap first (since callbacks are called from these
-    // functions).
-    // However, since this extra data is not used in the functions and to not make their arguments messier, we’ll
-    // encode the extra data using abi.encode().
-    struct CallbackData {
-        address token0;
-        address token1;
-        address payer;
-    }
-
     // SwapState maintains the current swap’s state
     struct SwapState {
         uint256 amountSpecifiedRemaining; // the remaining amount of tokens that need to be bought by the pool
         uint256 amountCalculated; // the out amount calculated by the contract
         uint160 sqrtPriceX96; // the new current price
         int24 tick; // the tick after a swap is done
+        uint128 liquidity;
     }
 
     // StepState maintains the current swap step’s state
@@ -62,6 +54,7 @@ contract UniswapV3Pool {
     struct StepState {
         uint160 sqrtPriceStartX96; // tracks the price the iteration begins with
         int24 nextTick; // the next initialized tick that will provide liquidity for the swap
+        bool initialized;
         uint160 sqrtPriceNextX96; // the price at the next tick
         uint256 amountIn; // amount that can be provided by the liquidity of the current iteration
         uint256 amountOut; // amount that can be provided by the liquidity of the current iteration
@@ -125,8 +118,8 @@ contract UniswapV3Pool {
         // ensure that some amount of liquidity is provided
         if (amount == 0) revert ZeroLiquidity();
 
-        bool flippedLower = ticks.update(lowerTick, amount);
-        bool flippedUpper = ticks.update(upperTick, amount);
+        bool flippedLower = ticks.update(lowerTick, int128(amount), false);
+        bool flippedUpper = ticks.update(upperTick, int128(amount), true);
 
         if (flippedLower) {
             tickBitmap.flipTick(lowerTick, 1);
@@ -177,9 +170,9 @@ contract UniswapV3Pool {
     }
 
     /// @param recipient the address of a receiver of tokens
-    /// @param zeroForOne is the flag that controls swap direction: when true, token0 is traded in for token1; when
-    /// false, it’s the opposite.
-    ///     For example, if token0 is ETH and token1 is USDC, setting zeroForOne to true means buying USDC for ETH.
+    /// @param zeroForOne is the flag that controls swap direction: when true, token0 is traded in for token1; 
+    /// when false, it’s the opposite.
+    /// For example, if token0 is ETH and token1 is USDC, setting zeroForOne to true means buying USDC for ETH.
     /// @param amountSpecified is the number of tokens the user wants to sell.
     /// @param sqrtPriceLimitX96 sqrtPriceLimitX96
     /// @param data encoded data for the callbacks.
