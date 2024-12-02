@@ -3,7 +3,17 @@ pragma solidity 0.8.25;
 
 import { Math } from "./Math.sol";
 
+/// @title SwapMath Library
+/// @notice Contains logic for computing swap steps in a Uniswap
 library SwapMath {
+    /// @notice Computes the next price and token amounts for a swap step
+    /// @param sqrtPriceCurrentX96 The current square root price as a Q96.96 value
+    /// @param sqrtPriceTargetX96 The target square root price as a Q96.96 value
+    /// @param liquidity The current liquidity available in the range
+    /// @param amountRemaining The remaining amount of input token
+    /// @return sqrtPriceNextX96 The next square root price
+    /// @return amountIn The amount of input token used in the step
+    /// @return amountOut The amount of output token obtained in the step
     function computeSwapStep(
         uint160 sqrtPriceCurrentX96,
         uint160 sqrtPriceTargetX96,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.25;
 
-import "./BitMath.sol";
+import { BitMath } from "./BitMath.sol";
 
 /// @title Packed tick initialized state library
 /// @notice Stores a packed mapping of tick index to its initialized state
@@ -28,8 +28,7 @@ library TickBitmap {
     }
 
     /// @notice Returns the next initialized tick contained in the same word (or adjacent word) as the tick that is
-    /// either
-    /// to the left (less than or equal to) or right (greater than) of the given tick
+    /// either to the left (less than or equal to) or right (greater than) of the given tick
     /// @param self The mapping in which to compute the next initialized tick
     /// @param tick The starting tick
     /// @param tickSpacing The spacing between usable ticks

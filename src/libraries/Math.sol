@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.25;
 
-import "prb/math/Common.sol";
+import "prb-math/Common.sol";
 import "./FixedPoint96.sol";
 
+/// @title Math Library
+/// @notice Provides mathematical utilities for price and liquidity calculations
 library Math {
-    /// @notice Calculates amount0 delta between two prices
+    /// @notice Calculates the delta of token0 between two square root prices
+    /// @param sqrtPriceAX96 The first square root price as a Q96.96 value
+    /// @param sqrtPriceBX96 The second square root price as a Q96.96 value
+    /// @param liquidity The liquidity available in the range
+    /// @return amount0 The calculated token0 delta
     /// TODO: round down when removing liquidity
     function calcAmount0Delta(uint160 sqrtPriceAX96, uint160 sqrtPriceBX96, uint128 liquidity)
         internal
