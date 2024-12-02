@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
 import "forge-std/Test.sol";
@@ -26,10 +26,9 @@ abstract contract TestUtils is Test {
     }
 
     function tick(uint256 price) internal pure returns (int24 tick_) {
-        tick_;
-        // tick_ = TickMath.getTickAtSqrtRatio(
-        //     uint160(int160(ABDKMath64x64.sqrt(int128(int256(price << 64))) << (FixedPoint96.RESOLUTION - 64)))
-        // );
+        tick_ = TickMath.getTickAtSqrtRatio(
+            uint160(int160(ABDKMath64x64.sqrt(int128(int256(price << 64))) << (FixedPoint96.RESOLUTION - 64)))
+        );
     }
 
     function sqrtP(uint256 price) internal pure returns (uint160) {

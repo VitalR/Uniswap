@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
 import "forge-std/Test.sol";
 
-import "./TestUtils.sol";
+import { TestUtils, LiquidityMath } from "./TestUtils.sol";
 
 abstract contract UniswapV3PoolUtils is Test, TestUtils {
     struct LiquidityRange {
@@ -33,24 +33,16 @@ abstract contract UniswapV3PoolUtils is Test, TestUtils {
             lowerTick: tick(lowerPrice),
             upperTick: tick(upperPrice),
             amount: LiquidityMath.getLiquidityForAmounts(
-                sqrtP(currentPrice),
-                sqrtP(lowerPrice),
-                sqrtP(upperPrice),
-                amount0,
-                amount1
+                sqrtP(currentPrice), sqrtP(lowerPrice), sqrtP(upperPrice), amount0, amount1
             )
         });
     }
 
-    function liquidityRange(
-        uint256 lowerPrice,
-        uint256 upperPrice,
-        uint128 amount
-    ) internal pure returns (LiquidityRange memory range) {
-        range = LiquidityRange({
-            lowerTick: tick(lowerPrice),
-            upperTick: tick(upperPrice),
-            amount: amount
-        });
+    function liquidityRange(uint256 lowerPrice, uint256 upperPrice, uint128 amount)
+        internal
+        pure
+        returns (LiquidityRange memory range)
+    {
+        range = LiquidityRange({ lowerTick: tick(lowerPrice), upperTick: tick(upperPrice), amount: amount });
     }
 }

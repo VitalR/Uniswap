@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import { IERC20 } from "./interfaces/IERC20.sol";
+import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
+
 import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
 import { IUniswapV3MintCallback } from "./interfaces/IUniswapV3MintCallback.sol";
 import { IUniswapV3SwapCallback } from "./interfaces/IUniswapV3SwapCallback.sol";
@@ -14,82 +15,87 @@ import { Tick } from "./libraries/Tick.sol";
 import { TickMath } from "./libraries/TickMath.sol";
 import { TickBitmap } from "./libraries/TickBitmap.sol";
 
+/// @title UniswapV3Pool
+/// @notice A Uniswap V3 pool contract that facilitates token swaps and liquidity provision with concentrated liquidity.
+/// @dev This contract implements the core functionalities of a Uniswap V3 pool, including minting liquidity positions,
+/// executing token swaps within defined price ranges, and managing ticks and liquidity for efficient market making.
 contract UniswapV3Pool is IUniswapV3Pool {
     using Tick for mapping(int24 => Tick.Info);
     using TickBitmap for mapping(int16 => uint256);
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
 
-    error InsufficientInputAmount();
-    error InvalidTickRange();
-    error ZeroLiquidity();
+    ////////////////////////////////////////////////////////////////////////////
+    //
+    // CONFIGURATION & STORAGE
+    //
+    ////////////////////////////////////////////////////////////////////////////
 
-    // Pool tokens, immutable
+    /// @notice Address of the first token in the pool.
     address public immutable token0;
+    /// @notice Address of the second token in the pool.
     address public immutable token1;
 
-    // First slot will contain essencian data. Packing variables that are read together
+    // First slot will contain essential data. Packing variables that are read together.
     struct Slot0 {
-        // the current price - sqrt(P)
-        // 20 bytes
+        /// @notice The current price of the pool in sqrt(P) format.
         uint160 sqrtPriceX96;
-        // the current tick
-        // 3 bytes
+        /// @notice The current tick of the pool.
         int24 tick;
     }
 
+    /// @notice The current state of the pool.
     Slot0 public slot0;
 
-    // SwapState maintains the current swap’s state
     struct SwapState {
-        uint256 amountSpecifiedRemaining; // the remaining amount of tokens that need to be bought by the pool
-        uint256 amountCalculated; // the out amount calculated by the contract
-        uint160 sqrtPriceX96; // the new current price
-        int24 tick; // the tick after a swap is done
+        /// @notice The remaining amount of tokens to be swapped.
+        uint256 amountSpecifiedRemaining;
+        /// @notice The calculated output amount during the swap.
+        uint256 amountCalculated;
+        /// @notice The current sqrt price of the pool after the swap.
+        uint160 sqrtPriceX96;
+        /// @notice The current tick of the pool after the swap.
+        int24 tick;
+        /// @notice The current liquidity of the pool during the swap.
         uint128 liquidity;
     }
 
-    // StepState maintains the current swap step’s state
-    // This structure tracks the state of one iteration of an “order filling”.
     struct StepState {
-        uint160 sqrtPriceStartX96; // tracks the price the iteration begins with
-        int24 nextTick; // the next initialized tick that will provide liquidity for the swap
+        /// @notice The sqrt price at the start of the swap step.
+        uint160 sqrtPriceStartX96;
+        /// @notice The next initialized tick to interact with.
+        int24 nextTick;
+        /// @notice Indicates whether the next tick is initialized.
         bool initialized;
-        uint160 sqrtPriceNextX96; // the price at the next tick
-        uint256 amountIn; // amount that can be provided by the liquidity of the current iteration
-        uint256 amountOut; // amount that can be provided by the liquidity of the current iteration
+        /// @notice The sqrt price at the next tick.
+        uint160 sqrtPriceNextX96;
+        /// @notice The input amount for the current step of the swap.
+        uint256 amountIn;
+        /// @notice The output amount for the current step of the swap.
+        uint256 amountOut;
     }
 
-    // Amount of liquidity, L.
+    /// @notice The current liquidity of the pool.
     uint128 public liquidity;
 
-    // Tick info
+    /// @notice Stores tick information mapped by tick indexes.
     mapping(int24 => Tick.Info) public ticks;
-    // The tick index is stored in a state variable
+    /// @notice Bitmap representing initialized tick states.
     mapping(int16 => uint256) public tickBitmap;
-    // Position info
+    /// @notice Stores position information mapped by position hashes.
     mapping(bytes32 => Position.Info) public positions;
 
-    event Mint(
-        address sender,
-        address owner,
-        int24 lowerTick,
-        int24 upperTick,
-        uint128 amount,
-        uint256 amount0,
-        uint256 amount1
-    );
+    ////////////////////////////////////////////////////////////////////////////
+    //
+    // CONSTRUCTOR & FUNCTIONS
+    //
+    ////////////////////////////////////////////////////////////////////////////
 
-    event Swap(
-        address sender,
-        address recipient,
-        int256 amount0,
-        int256 amount1,
-        uint160 sqrtPriceX96,
-        uint128 liquidity,
-        int24 tick
-    );
-
+    /// @notice Constructor to initialize the pool with tokens, price, and tick.
+    /// @param _token0 The address of the first token in the pool.
+    /// @param _token1 The address of the second token in the pool.
+    /// @param _sqrtPriceX96 The initial sqrt price of the pool.
+    /// @param _tick The initial tick of the pool.
     constructor(address _token0, address _token1, uint160 _sqrtPriceX96, int24 _tick) {
         token0 = _token0;
         token1 = _token1;
@@ -97,15 +103,21 @@ contract UniswapV3Pool is IUniswapV3Pool {
         slot0 = Slot0({ sqrtPriceX96: _sqrtPriceX96, tick: _tick });
     }
 
-    //////////////////////////
-    //  External Functions  //
-    //////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    //
+    // EXTERNAL & CORE LOGIC
+    //
+    ////////////////////////////////////////////////////////////////////////////
 
-    /// @param owner owner’s address, to track the owner of the liquidity
-    /// @param lowerTick lower ticks, to set the bounds of a price range
-    /// @param upperTick upper ticks, to set the bounds of a price range
-    /// @param amount of liquidity the user want to provide
-    /// @param data encoded data for the callbacks
+    /// @notice Mints liquidity for the given range in the pool.
+    /// @dev Updates the position and pool's liquidity. Emits a Mint event on success.
+    /// @param owner The address that will own the minted liquidity.
+    /// @param lowerTick The lower tick of the liquidity range.
+    /// @param upperTick The upper tick of the liquidity range.
+    /// @param amount The amount of liquidity to mint.
+    /// @param data Encoded data for the mint callback.
+    /// @return amount0 The actual amount of token0 used for the mint.
+    /// @return amount1 The actual amount of token1 used for the mint.
     function mint(address owner, int24 lowerTick, int24 upperTick, uint128 amount, bytes calldata data)
         external
         returns (uint256 amount0, uint256 amount1)
@@ -169,13 +181,15 @@ contract UniswapV3Pool is IUniswapV3Pool {
         emit Mint(msg.sender, owner, lowerTick, upperTick, amount, amount0, amount1);
     }
 
-    /// @param recipient the address of a receiver of tokens
-    /// @param zeroForOne is the flag that controls swap direction: when true, token0 is traded in for token1; 
-    /// when false, it’s the opposite.
-    /// For example, if token0 is ETH and token1 is USDC, setting zeroForOne to true means buying USDC for ETH.
-    /// @param amountSpecified is the number of tokens the user wants to sell.
-    /// @param sqrtPriceLimitX96 sqrtPriceLimitX96
-    /// @param data encoded data for the callbacks.
+    /// @notice Swaps tokens within the pool.
+    /// @dev Executes a swap based on the provided parameters. Emits a Swap event on success.
+    /// @param recipient The address to receive the swapped tokens.
+    /// @param zeroForOne If true, token0 is swapped for token1; otherwise, token1 is swapped for token0.
+    /// @param amountSpecified The specified input or output amount for the swap.
+    /// @param sqrtPriceLimitX96 The price limit for the swap in sqrt(P) format.
+    /// @param data Encoded data for the swap callback.
+    /// @return amount0 The net change in token0 during the swap.
+    /// @return amount1 The net change in token1 during the swap.
     function swap(
         address recipient,
         bool zeroForOne,
@@ -185,6 +199,12 @@ contract UniswapV3Pool is IUniswapV3Pool {
     ) public returns (int256 amount0, int256 amount1) {
         Slot0 memory _slot0 = slot0; // SLOAD for gas optimization
         uint128 _liquidity = liquidity;
+
+        if (
+            zeroForOne
+                ? sqrtPriceLimitX96 > _slot0.sqrtPriceX96 || sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                : sqrtPriceLimitX96 < _slot0.sqrtPriceX96 || sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+        ) revert InvalidPriceLimit();
 
         // initialize a SwapState instance
         SwapState memory state = SwapState({
@@ -214,7 +234,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
                 (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
                     ? sqrtPriceLimitX96
                     : step.sqrtPriceNextX96,
-                liquidity,
+                state.liquidity,
                 state.amountSpecifiedRemaining
             );
 
@@ -223,8 +243,23 @@ contract UniswapV3Pool is IUniswapV3Pool {
                 // user
             state.amountCalculated += step.amountOut; // the related number of the other token the pool can sell to the
                 // user
-            state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96); // the current price that will be set after
-                // the swap (recall that trading changes current price)
+
+            // the swap (recall that trading changes current price)
+            if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
+                if (step.initialized) {
+                    int128 liquidityDelta = ticks.cross(step.nextTick);
+
+                    if (zeroForOne) liquidityDelta = -liquidityDelta;
+
+                    state.liquidity = LiquidityMath.addLiquidity(state.liquidity, liquidityDelta);
+
+                    if (state.liquidity == 0) revert NotEnoughLiquidity();
+                }
+
+                state.tick = zeroForOne ? step.nextTick - 1 : step.nextTick;
+            } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
+                state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
+            }
         }
 
         // since this operation writes to the contract’s storage, we want to do it only if the new tick is different,
@@ -232,6 +267,8 @@ contract UniswapV3Pool is IUniswapV3Pool {
         if (state.tick != _slot0.tick) {
             (slot0.sqrtPriceX96, slot0.tick) = (state.sqrtPriceX96, state.tick);
         }
+
+        if (_liquidity != state.liquidity) liquidity = state.liquidity;
 
         // calculate swap amounts based on the swap direction and the amounts calculated during the swap loop
         (amount0, amount1) = zeroForOne
@@ -259,18 +296,24 @@ contract UniswapV3Pool is IUniswapV3Pool {
             }
         }
 
-        emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, liquidity, slot0.tick);
+        emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
     }
 
-    //////////////////////////
-    //  Internal Functions  //
-    //////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    //
+    // INTERNAL
+    //
+    ////////////////////////////////////////////////////////////////////////////
 
-    function balance0() internal returns (uint256 balance) {
+    /// @notice Fetches the balance of token0 held by the pool.
+    /// @return balance The balance of token0.
+    function balance0() internal view returns (uint256 balance) {
         balance = IERC20(token0).balanceOf(address(this));
     }
 
-    function balance1() internal returns (uint256 balance) {
+    /// @notice Fetches the balance of token1 held by the pool.
+    /// @return balance The balance of token1.
+    function balance1() internal view returns (uint256 balance) {
         balance = IERC20(token1).balanceOf(address(this));
     }
 }

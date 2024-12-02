@@ -2,11 +2,12 @@
 pragma solidity 0.8.25;
 
 import { Test, stdError } from "forge-std/Test.sol";
-// import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
-import "./TestUtils.sol";
 
-import "../src/libraries/LiquidityMath.sol";
-import {UniswapV3Manager, IUniswapV3Manager} from "../src/UniswapV3Manager.sol";
+import { UniswapV3Manager, IUniswapV3Manager } from "../src/UniswapV3Manager.sol";
+import { UniswapV3Pool } from "src/UniswapV3Pool.sol";
+import { LiquidityMath } from "../src/libraries/LiquidityMath.sol";
+import { TestUtils, TickMath } from "./TestUtils.sol";
+import { ERC20Mock } from "./mocks/ERC20Mock.sol";
 
 contract UniswapV3ManagerTest is Test, TestUtils {
     ERC20Mock token0;
@@ -40,26 +41,26 @@ contract UniswapV3ManagerTest is Test, TestUtils {
         });
         (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
 
-        // (uint256 expectedAmount0, uint256 expectedAmount1) = (0.9989955801315816 ether, 4999.999999999999999999 ether);
+        (uint256 expectedAmount0, uint256 expectedAmount1) = (0.9989955801315816 ether, 4999.999999999999999999 ether);
 
-        // assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
-        // assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
+        assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
+        assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
 
-        // assertMintState(
-        //     ExpectedStateAfterMint({
-        //         pool: pool,
-        //         token0: token0,
-        //         token1: token1,
-        //         amount0: expectedAmount0,
-        //         amount1: expectedAmount1,
-        //         lowerTick: mints[0].lowerTick,
-        //         upperTick: mints[0].upperTick,
-        //         positionLiquidity: liquidity(mints[0], 5000),
-        //         currentLiquidity: liquidity(mints[0], 5000),
-        //         sqrtPriceX96: sqrtP(5000),
-        //         tick: tick(5000)
-        //     })
-        // );
+        assertMintState(
+            ExpectedStateAfterMint({
+                pool: pool,
+                token0: token0,
+                token1: token1,
+                amount0: expectedAmount0,
+                amount1: expectedAmount1,
+                lowerTick: mints[0].lowerTick,
+                upperTick: mints[0].upperTick,
+                positionLiquidity: liquidity(mints[0], 5000),
+                currentLiquidity: liquidity(mints[0], 5000),
+                sqrtPriceX96: sqrtP(5000),
+                tick: tick(5000)
+            })
+        );
     }
 
     function testMintRangeBelow() public {
@@ -620,8 +621,6 @@ contract UniswapV3ManagerTest is Test, TestUtils {
         pool =
             new UniswapV3Pool(address(token0), address(token1), sqrtP(params.currentPrice), tick(params.currentPrice));
 
-        console2.log("setupTestCase::address(pool) - before mint ", address(pool));
-
         if (params.mintLiqudity) {
             token0.approve(address(manager), params.wethBalance);
             token1.approve(address(manager), params.usdcBalance);
@@ -629,11 +628,8 @@ contract UniswapV3ManagerTest is Test, TestUtils {
             uint256 poolBalance0Tmp;
             uint256 poolBalance1Tmp;
             for (uint256 i = 0; i < params.mints.length; i++) {
-                
                 params.mints[i].poolAddress = address(pool);
-                console2.log("setupTestCase::params.mints[i] - before mint ", params.mints[i].amount0Min, params.mints[i].amount1Min);
                 (poolBalance0Tmp, poolBalance1Tmp) = manager.mint(params.mints[i]);
-                console2.log("setupTestCase::params.mints[i] - after mint", poolBalance0Tmp, poolBalance1Tmp);
                 poolBalance0 += poolBalance0Tmp;
                 poolBalance1 += poolBalance1Tmp;
             }

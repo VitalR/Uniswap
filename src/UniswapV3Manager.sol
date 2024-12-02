@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
+import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
+
 import { IUniswapV3Manager } from "./interfaces/IUniswapV3Manager.sol";
-import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
-import { UniswapV3Pool } from "./UniswapV3Pool.sol";
-import { IERC20 } from "./interfaces/IERC20.sol";
+import { UniswapV3Pool, IUniswapV3Pool } from "./UniswapV3Pool.sol";
 
 import { LiquidityMath } from "src/libraries/LiquidityMath.sol";
 import { TickMath } from "src/libraries/TickMath.sol";
@@ -13,7 +13,19 @@ import { TickMath } from "src/libraries/TickMath.sol";
 /// @notice This contract works with any Uniswap V3 pool, allowing any address to interact with it.
 /// The manager contract serves as a simple intermediary, redirecting calls to a specific pool contract.
 contract UniswapV3Manager is IUniswapV3Manager {
-    // / @notice Mint function for providing liquidity to a Uniswap V3 pool.
+    /// @notice Mint function for providing liquidity to a Uniswap V3 pool.
+    /// @dev This function calculates the liquidity based on the specified ticks and amounts, then mints liquidity
+    ///      to the specified Uniswap V3 pool. It reverts if the slippage tolerance is exceeded.
+    /// @param params The parameters required for minting liquidity, encapsulated in a `MintParams` struct:
+    ///        - poolAddress: The address of the Uniswap V3 pool.
+    ///        - lowerTick: The lower tick of the position.
+    ///        - upperTick: The upper tick of the position.
+    ///        - amount0Desired: The desired amount of token0 to add as liquidity.
+    ///        - amount1Desired: The desired amount of token1 to add as liquidity.
+    ///        - amount0Min: The minimum amount of token0 required to mint liquidity.
+    ///        - amount1Min: The minimum amount of token1 required to mint liquidity.
+    /// @return amount0 The actual amount of token0 used to mint the liquidity.
+    /// @return amount1 The actual amount of token1 used to mint the liquidity.
     function mint(MintParams calldata params) public returns (uint256 amount0, uint256 amount1) {
         IUniswapV3Pool pool = IUniswapV3Pool(params.poolAddress);
 
@@ -39,13 +51,20 @@ contract UniswapV3Manager is IUniswapV3Manager {
     }
 
     /// @notice Swap function for swapping tokens on a Uniswap V3 pool.
+    /// @dev Executes a swap on the specified Uniswap V3 pool. If `sqrtPriceLimitX96` is zero, it defaults to the minimum or maximum
+    ///      sqrt price ratio depending on the swap direction.
     /// @param poolAddress The address of the Uniswap V3 pool contract.
-    /// @param zeroForOne If true, token0 is the input, otherwise token1 is the input.
-    /// @param amountSpecified The specified input or output amount, depending on the direction of the swap.
-    /// @param sqrtPriceLimitX96 ...
-    /// @param data Additional data encoded using abi.encode().
-    /// @return amount0 The amount of token0 swapped.
-    /// @return amount1 The amount of token1 swapped.
+    /// @param zeroForOne If true, token0 is the input and token1 is the output. Otherwise, token1 is the input and token0 is the output.
+    /// @param amountSpecified The specified input or output amount for the swap. A positive value represents an input amount,
+    ///        while a negative value represents an output amount.
+    /// @param sqrtPriceLimitX96 The Q64.96 sqrt price limit for the swap. If set to zero, it uses default values:
+    ///        - For zeroForOne = true: TickMath.MIN_SQRT_RATIO + 1.
+    ///        - For zeroForOne = false: TickMath.MAX_SQRT_RATIO - 1.
+    /// @param data Additional arbitrary data to pass to the callback function, encoded using `abi.encode`.
+    /// @return amount0 The net change in token0 as a result of the swap. A positive value indicates token0 was received,
+    ///         and a negative value indicates token0 was sent.
+    /// @return amount1 The net change in token1 as a result of the swap. A positive value indicates token1 was received,
+    ///         and a negative value indicates token1 was sent.
     function swap(
         address poolAddress,
         bool zeroForOne,
