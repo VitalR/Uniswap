@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 import "forge-std/Test.sol";
 
-import { TestUtils, LiquidityMath } from "./TestUtils.sol";
+import { TestUtils, LiquidityMath } from "test/utils/TestUtils.sol";
 
 abstract contract UniswapV3PoolUtils is Test, TestUtils {
     struct LiquidityRange {

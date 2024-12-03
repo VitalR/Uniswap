@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import { Test, stdError } from "forge-std/Test.sol";
 
 import { UniswapV3Pool, IUniswapV3Pool, IERC20 } from "src/UniswapV3Pool.sol";
-import { UniswapV3PoolUtils } from "test/UniswapV3Pool.Utils.t.sol";
+import { UniswapV3PoolUtils } from "test/utils/UniswapV3Pool.Utils.t.sol";
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
 
 contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
@@ -34,21 +34,10 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         });
         (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
 
-        (uint256 expectedAmount0, uint256 expectedAmount1) = (
-            0.998995580131581600 ether,
-            4999.999999999999999999 ether
-        );
+        (uint256 expectedAmount0, uint256 expectedAmount1) = (0.9989955801315816 ether, 4999.999999999999999999 ether);
 
-        assertEq(
-            poolBalance0,
-            expectedAmount0,
-            "incorrect token0 deposited amount"
-        );
-        assertEq(
-            poolBalance1,
-            expectedAmount1,
-            "incorrect token1 deposited amount"
-        );
+        assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
+        assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
 
         assertMintState(
             ExpectedStateAfterMint({
@@ -81,21 +70,10 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         });
         (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
 
-        (uint256 expectedAmount0, uint256 expectedAmount1) = (
-            0 ether,
-            4999.999999999999999997 ether
-        );
+        (uint256 expectedAmount0, uint256 expectedAmount1) = (0 ether, 4999.999999999999999997 ether);
 
-        assertEq(
-            poolBalance0,
-            expectedAmount0,
-            "incorrect token0 deposited amount"
-        );
-        assertEq(
-            poolBalance1,
-            expectedAmount1,
-            "incorrect token1 deposited amount"
-        );
+        assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
+        assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
 
         assertMintState(
             ExpectedStateAfterMint({
@@ -130,16 +108,8 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
 
         (uint256 expectedAmount0, uint256 expectedAmount1) = (1 ether, 0);
 
-        assertEq(
-            poolBalance0,
-            expectedAmount0,
-            "incorrect token0 deposited amount"
-        );
-        assertEq(
-            poolBalance1,
-            expectedAmount1,
-            "incorrect token1 deposited amount"
-        );
+        assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
+        assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
 
         assertMintState(
             ExpectedStateAfterMint({
@@ -166,14 +136,10 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     function testMintOverlappingRanges() public {
         LiquidityRange[] memory liquidity = new LiquidityRange[](2);
         liquidity[0] = liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000);
-        liquidity[1] = liquidityRange(
-            4000,
-            6250,
-            (liquidity[0].amount * 75) / 100
-        );
+        liquidity[1] = liquidityRange(4000, 6250, (liquidity[0].amount * 75) / 100);
         TestCaseParams memory params = TestCaseParams({
             wethBalance: 3 ether,
-            usdcBalance: 15000 ether,
+            usdcBalance: 15_000 ether,
             currentPrice: 5000,
             liquidity: liquidity,
             transferInMintCallback: true,
@@ -182,10 +148,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         });
         setupTestCase(params);
 
-        (uint256 amount0, uint256 amount1) = (
-            2.698571339742487358 ether,
-            13501.317327786998874075 ether
-        );
+        (uint256 amount0, uint256 amount1) = (2.698571339742487358 ether, 13_501.317327786998874075 ether);
 
         assertMintState(
             ExpectedStateAfterMint({
@@ -220,36 +183,21 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     }
 
     function testMintInvalidTickRangeLower() public {
-        pool = new UniswapV3Pool(
-            address(token0),
-            address(token1),
-            uint160(1),
-            0
-        );
+        pool = new UniswapV3Pool(address(token0), address(token1), uint160(1), 0);
 
         vm.expectRevert(encodeError("InvalidTickRange()"));
-        pool.mint(address(this), -887273, 0, 0, "");
+        pool.mint(address(this), -887_273, 0, 0, "");
     }
 
     function testMintInvalidTickRangeUpper() public {
-        pool = new UniswapV3Pool(
-            address(token0),
-            address(token1),
-            uint160(1),
-            0
-        );
+        pool = new UniswapV3Pool(address(token0), address(token1), uint160(1), 0);
 
         vm.expectRevert(encodeError("InvalidTickRange()"));
-        pool.mint(address(this), 0, 887273, 0, "");
+        pool.mint(address(this), 0, 887_273, 0, "");
     }
 
     function testMintZeroLiquidity() public {
-        pool = new UniswapV3Pool(
-            address(token0),
-            address(token1),
-            uint160(1),
-            0
-        );
+        pool = new UniswapV3Pool(address(token0), address(token1), uint160(1), 0);
 
         vm.expectRevert(encodeError("ZeroLiquidity()"));
         pool.mint(address(this), 0, 1, 0, "");
@@ -270,31 +218,17 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         setupTestCase(params);
 
         vm.expectRevert(encodeError("InsufficientInputAmount()"));
-        pool.mint(
-            address(this),
-            liquidity[0].lowerTick,
-            liquidity[0].upperTick,
-            liquidity[0].amount,
-            ""
-        );
+        pool.mint(address(this), liquidity[0].lowerTick, liquidity[0].upperTick, liquidity[0].amount, "");
     }
-
 
     ////////////////////////////////////////////////////////////////////////////
     //
     // CALLBACKS
     //
     ////////////////////////////////////////////////////////////////////////////
-    function uniswapV3MintCallback(
-        uint256 amount0,
-        uint256 amount1,
-        bytes calldata data
-    ) public {
+    function uniswapV3MintCallback(uint256 amount0, uint256 amount1, bytes calldata data) public {
         if (transferInMintCallback) {
-            IUniswapV3Pool.CallbackData memory extra = abi.decode(
-                data,
-                (IUniswapV3Pool.CallbackData)
-            );
+            IUniswapV3Pool.CallbackData memory extra = abi.decode(data, (IUniswapV3Pool.CallbackData));
 
             IERC20(extra.token0).transferFrom(extra.payer, msg.sender, amount0);
             IERC20(extra.token1).transferFrom(extra.payer, msg.sender, amount1);
@@ -302,10 +236,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     }
 
     function uniswapV3FlashCallback(bytes calldata data) public {
-        (uint256 amount0, uint256 amount1) = abi.decode(
-            data,
-            (uint256, uint256)
-        );
+        (uint256 amount0, uint256 amount1) = abi.decode(data, (uint256, uint256));
 
         if (amount0 > 0) token0.transfer(msg.sender, amount0);
         if (amount1 > 0) token1.transfer(msg.sender, amount1);
@@ -325,22 +256,14 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         token0.mint(address(this), params.wethBalance);
         token1.mint(address(this), params.usdcBalance);
 
-        pool = new UniswapV3Pool(
-            address(token0),
-            address(token1),
-            sqrtP(params.currentPrice),
-            tick(params.currentPrice)
-        );
+        pool =
+            new UniswapV3Pool(address(token0), address(token1), sqrtP(params.currentPrice), tick(params.currentPrice));
 
         if (params.mintLiqudity) {
             token0.approve(address(this), params.wethBalance);
             token1.approve(address(this), params.usdcBalance);
 
-            bytes memory extra = encodeExtra(
-                address(token0),
-                address(token1),
-                address(this)
-            );
+            bytes memory extra = encodeExtra(address(token0), address(token1), address(this));
 
             uint256 poolBalance0Tmp;
             uint256 poolBalance1Tmp;

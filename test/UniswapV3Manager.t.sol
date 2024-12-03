@@ -6,7 +6,7 @@ import { Test, stdError } from "forge-std/Test.sol";
 import { UniswapV3Manager, IUniswapV3Manager } from "../src/UniswapV3Manager.sol";
 import { UniswapV3Pool } from "src/UniswapV3Pool.sol";
 import { LiquidityMath } from "../src/libraries/LiquidityMath.sol";
-import { TestUtils, TickMath } from "./TestUtils.sol";
+import { TestUtils, TickMath } from "./utils/TestUtils.sol";
 import { ERC20Mock } from "./mocks/ERC20Mock.sol";
 
 contract UniswapV3ManagerTest is Test, TestUtils {

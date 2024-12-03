@@ -7,7 +7,7 @@ import { UniswapV3Quoter } from "src/UniswapV3Quoter.sol";
 import { UniswapV3Pool, IERC20 } from "src/UniswapV3Pool.sol";
 import { UniswapV3Manager, IUniswapV3Manager } from "src/UniswapV3Manager.sol";
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
-import { TestUtils } from "./TestUtils.sol";
+import { TestUtils } from "./utils/TestUtils.sol";
 
 contract UniswapV3QuoterTest is Test, TestUtils {
     ERC20Mock token0;

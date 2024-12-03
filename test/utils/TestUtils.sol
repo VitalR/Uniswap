@@ -4,9 +4,9 @@ pragma solidity 0.8.25;
 import "forge-std/Test.sol";
 import "abdk-math/ABDKMath64x64.sol";
 
-import "../src/interfaces/IUniswapV3Pool.sol";
-import "../src/libraries/FixedPoint96.sol";
-import "../src/UniswapV3Pool.sol";
+import "src/interfaces/IUniswapV3Pool.sol";
+import "src/libraries/FixedPoint96.sol";
+import "src/UniswapV3Pool.sol";
 
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
 
