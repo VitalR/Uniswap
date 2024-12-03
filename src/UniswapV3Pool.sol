@@ -3,15 +3,16 @@ pragma solidity 0.8.25;
 
 import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
 
-import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
-import { IUniswapV3MintCallback } from "./interfaces/IUniswapV3MintCallback.sol";
-import { IUniswapV3SwapCallback } from "./interfaces/IUniswapV3SwapCallback.sol";
 import { IUniswapV3FlashCallback } from "./interfaces/IUniswapV3FlashCallback.sol";
+import { IUniswapV3MintCallback } from "./interfaces/IUniswapV3MintCallback.sol";
+import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
+import { IUniswapV3PoolDeployer } from "./interfaces/IUniswapV3PoolDeployer.sol";
+import { IUniswapV3SwapCallback } from "./interfaces/IUniswapV3SwapCallback.sol";
 
 import { LiquidityMath } from "./libraries/LiquidityMath.sol";
 import { Math } from "./libraries/Math.sol";
-import { SwapMath } from "./libraries/SwapMath.sol";
 import { Position } from "./libraries/Position.sol";
+import { SwapMath } from "./libraries/SwapMath.sol";
 import { Tick } from "./libraries/Tick.sol";
 import { TickMath } from "./libraries/TickMath.sol";
 import { TickBitmap } from "./libraries/TickBitmap.sol";
@@ -32,10 +33,14 @@ contract UniswapV3Pool is IUniswapV3Pool {
     //
     ////////////////////////////////////////////////////////////////////////////
 
+    /// @notice The address of the factory that deployed this pool.
+    address public immutable factory;
     /// @notice Address of the first token in the pool.
     address public immutable token0;
     /// @notice Address of the second token in the pool.
     address public immutable token1;
+    /// @notice The tick spacing for this pool.
+    uint24 public immutable tickSpacing;
 
     // First slot will contain essential data. Packing variables that are read together.
     struct Slot0 {
@@ -92,14 +97,18 @@ contract UniswapV3Pool is IUniswapV3Pool {
     //
     ////////////////////////////////////////////////////////////////////////////
 
-    /// @notice Constructor to initialize the pool with tokens, price, and tick.
-    /// @param _token0 The address of the first token in the pool.
-    /// @param _token1 The address of the second token in the pool.
+    /// @notice Constructor initializes the pool parameters from the deployer.
+    constructor() {
+        (factory, token0, token1, tickSpacing) = IUniswapV3PoolDeployer(msg.sender).parameters();
+    }
+
+    /// @notice Initializes the pool with a specific sqrt price.
+    /// @dev Ensures the pool is only initialized once.
     /// @param _sqrtPriceX96 The initial sqrt price of the pool.
-    /// @param _tick The initial tick of the pool.
-    constructor(address _token0, address _token1, uint160 _sqrtPriceX96, int24 _tick) {
-        token0 = _token0;
-        token1 = _token1;
+    function initialize(uint160 _sqrtPriceX96) public {
+        if (slot0.sqrtPriceX96 != 0) revert AlreadyInitialized();
+
+        int24 _tick = TickMath.getTickAtSqrtRatio(_sqrtPriceX96);
 
         slot0 = Slot0({ sqrtPriceX96: _sqrtPriceX96, tick: _tick });
     }
@@ -301,17 +310,14 @@ contract UniswapV3Pool is IUniswapV3Pool {
     }
 
     /// @notice Executes a flash loan for token0 and/or token1.
-    /// @dev Transfers the requested token amounts to the caller, then expects the full repayment with any additional fees.
+    /// @dev Transfers the requested token amounts to the caller, then expects the full repayment with any additional
+    /// fees.
     ///      This function ensures that the pool balance is restored after the flash loan is executed.
     /// @param amount0 The amount of token0 to flash loan to the caller.
     /// @param amount1 The amount of token1 to flash loan to the caller.
     /// @param data Encoded data passed to the callback function for custom logic execution by the caller.
     ///             The callback function must handle repayment of the flash loan with any applicable fees.
-    function flash(
-        uint256 amount0,
-        uint256 amount1,
-        bytes calldata data
-    ) public {
+    function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
         uint256 balance0Before = IERC20(token0).balanceOf(address(this));
         uint256 balance1Before = IERC20(token1).balanceOf(address(this));
 

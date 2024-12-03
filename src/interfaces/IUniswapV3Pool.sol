@@ -7,11 +7,12 @@ pragma solidity 0.8.25;
 ///      It includes errors and data structures necessary for pool operations and safety checks.
 interface IUniswapV3Pool {
     /// @dev Custom Errors
+    error AlreadyInitialized();
     error InsufficientInputAmount();
     error InvalidTickRange();
-    error ZeroLiquidity();
     error InvalidPriceLimit();
     error NotEnoughLiquidity();
+    error ZeroLiquidity();
 
     struct CallbackData {
         /// @notice The address of token0 in the pool.
