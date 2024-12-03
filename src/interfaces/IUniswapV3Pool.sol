@@ -58,6 +58,12 @@ interface IUniswapV3Pool {
         int24 tick
     );
 
+    /// @notice Emitted when a flash loan is executed.
+    /// @param sender The address that initiated the flash loan.
+    /// @param amount0 The amount of token0 borrowed in the flash loan.
+    /// @param amount1 The amount of token1 borrowed in the flash loan.
+    event Flash(address indexed sender, uint256 amount0, uint256 amount1);
+
     /// @notice Retrieves the current slot0 values from the Uniswap V3 pool.
     /// @return sqrtPriceX96 The square root of the price multiplied by 2^96.
     /// @return tick The current tick value.

@@ -221,11 +221,31 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         pool.mint(address(this), liquidity[0].lowerTick, liquidity[0].upperTick, liquidity[0].amount, "");
     }
 
+    function testFlash() public {
+        LiquidityRange[] memory liquidity = new LiquidityRange[](1);
+        liquidity[0] = liquidityRange(4545, 5500, 1 ether, 5000 ether, 5000);
+        TestCaseParams memory params = TestCaseParams({
+            wethBalance: 1 ether,
+            usdcBalance: 5000 ether,
+            currentPrice: 5000,
+            liquidity: liquidity,
+            transferInMintCallback: true,
+            transferInSwapCallback: true,
+            mintLiqudity: true
+        });
+        setupTestCase(params);
+
+        pool.flash(0.1 ether, 1000 ether, abi.encodePacked(uint256(0.1 ether), uint256(1000 ether)));
+
+        assertTrue(flashCallbackCalled, "flash callback wasn't called");
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     //
     // CALLBACKS
     //
     ////////////////////////////////////////////////////////////////////////////
+
     function uniswapV3MintCallback(uint256 amount0, uint256 amount1, bytes calldata data) public {
         if (transferInMintCallback) {
             IUniswapV3Pool.CallbackData memory extra = abi.decode(data, (IUniswapV3Pool.CallbackData));
@@ -249,6 +269,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     // INTERNAL
     //
     ////////////////////////////////////////////////////////////////////////////
+
     function setupTestCase(TestCaseParams memory params)
         internal
         returns (uint256 poolBalance0, uint256 poolBalance1)

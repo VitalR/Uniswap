@@ -6,6 +6,7 @@ import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
 import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
 import { IUniswapV3MintCallback } from "./interfaces/IUniswapV3MintCallback.sol";
 import { IUniswapV3SwapCallback } from "./interfaces/IUniswapV3SwapCallback.sol";
+import { IUniswapV3FlashCallback } from "./interfaces/IUniswapV3FlashCallback.sol";
 
 import { LiquidityMath } from "./libraries/LiquidityMath.sol";
 import { Math } from "./libraries/Math.sol";
@@ -297,6 +298,32 @@ contract UniswapV3Pool is IUniswapV3Pool {
         }
 
         emit Swap(msg.sender, recipient, amount0, amount1, slot0.sqrtPriceX96, state.liquidity, slot0.tick);
+    }
+
+    /// @notice Executes a flash loan for token0 and/or token1.
+    /// @dev Transfers the requested token amounts to the caller, then expects the full repayment with any additional fees.
+    ///      This function ensures that the pool balance is restored after the flash loan is executed.
+    /// @param amount0 The amount of token0 to flash loan to the caller.
+    /// @param amount1 The amount of token1 to flash loan to the caller.
+    /// @param data Encoded data passed to the callback function for custom logic execution by the caller.
+    ///             The callback function must handle repayment of the flash loan with any applicable fees.
+    function flash(
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata data
+    ) public {
+        uint256 balance0Before = IERC20(token0).balanceOf(address(this));
+        uint256 balance1Before = IERC20(token1).balanceOf(address(this));
+
+        if (amount0 > 0) IERC20(token0).transfer(msg.sender, amount0);
+        if (amount1 > 0) IERC20(token1).transfer(msg.sender, amount1);
+
+        IUniswapV3FlashCallback(msg.sender).uniswapV3FlashCallback(data);
+
+        require(IERC20(token0).balanceOf(address(this)) >= balance0Before);
+        require(IERC20(token1).balanceOf(address(this)) >= balance1Before);
+
+        emit Flash(msg.sender, amount0, amount1);
     }
 
     ////////////////////////////////////////////////////////////////////////////
