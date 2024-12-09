@@ -4,20 +4,42 @@ pragma solidity 0.8.25;
 import { Test, stdError } from "forge-std/Test.sol";
 
 import { UniswapV3Pool, IUniswapV3Pool, IERC20 } from "src/UniswapV3Pool.sol";
+import { UniswapV3Factory } from "src/UniswapV3Factory.sol";
 import { UniswapV3PoolUtils } from "test/utils/UniswapV3Pool.Utils.t.sol";
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
 
+import "lib/forge-std/src/console2.sol";
+
 contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
-    ERC20Mock token0;
-    ERC20Mock token1;
+    ERC20Mock weth;
+    ERC20Mock usdc;
     UniswapV3Pool pool;
+    UniswapV3Factory factory;
 
     bool transferInMintCallback = true;
     bool flashCallbackCalled = false;
 
     function setUp() public {
-        token0 = new ERC20Mock("Ether", "ETH");
-        token1 = new ERC20Mock("USDC", "USDC");
+        usdc = new ERC20Mock("USDC", "USDC");
+        weth = new ERC20Mock("Wrapped Ether", "WETH");
+        factory = new UniswapV3Factory();
+    }
+
+    function testInitialize() public {
+        pool = UniswapV3Pool(factory.createPool(address(weth), address(usdc), 60));
+
+        (uint160 sqrtPriceX96, int24 tick) = pool.slot0();
+        assertEq(sqrtPriceX96, 0, "invalid sqrtPriceX96");
+        assertEq(tick, 0, "invalid tick");
+
+        pool.initialize(sqrtP(31_337));
+
+        (sqrtPriceX96, tick) = pool.slot0();
+        assertEq(sqrtPriceX96, 14_025_175_117_687_921_942_002_399_182_848, "invalid sqrtPriceX96");
+        assertEq(tick, 103_530, "invalid tick");
+
+        vm.expectRevert(encodeError("AlreadyInitialized()"));
+        pool.initialize(sqrtP(42));
     }
 
     function testMintInRange() public {
@@ -34,16 +56,16 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         });
         (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
 
-        (uint256 expectedAmount0, uint256 expectedAmount1) = (0.9989955801315816 ether, 4999.999999999999999999 ether);
+        (uint256 expectedAmount0, uint256 expectedAmount1) = (0.987078348444137445 ether, 5000 ether);
 
-        assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
-        assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
+        assertEq(poolBalance0, expectedAmount0, "incorrect weth deposited amount");
+        assertEq(poolBalance1, expectedAmount1, "incorrect usdc deposited amount");
 
         assertMintState(
             ExpectedStateAfterMint({
                 pool: pool,
-                token0: token0,
-                token1: token1,
+                token0: weth,
+                token1: usdc,
                 amount0: expectedAmount0,
                 amount1: expectedAmount1,
                 lowerTick: liquidity[0].lowerTick,
@@ -58,7 +80,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
 
     function testMintRangeBelow() public {
         LiquidityRange[] memory liquidity = new LiquidityRange[](1);
-        liquidity[0] = liquidityRange(4000, 4999, 1 ether, 5000 ether, 5000);
+        liquidity[0] = liquidityRange(4000, 4996, 1 ether, 5000 ether, 5000);
         TestCaseParams memory params = TestCaseParams({
             wethBalance: 1 ether,
             usdcBalance: 5000 ether,
@@ -70,16 +92,16 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         });
         (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
 
-        (uint256 expectedAmount0, uint256 expectedAmount1) = (0 ether, 4999.999999999999999997 ether);
+        (uint256 expectedAmount0, uint256 expectedAmount1) = (0 ether, 4999.999999999999999994 ether);
 
-        assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
-        assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
+        assertEq(poolBalance0, expectedAmount0, "incorrect weth deposited amount");
+        assertEq(poolBalance1, expectedAmount1, "incorrect usdc deposited amount");
 
         assertMintState(
             ExpectedStateAfterMint({
                 pool: pool,
-                token0: token0,
-                token1: token1,
+                token0: weth,
+                token1: usdc,
                 amount0: expectedAmount0,
                 amount1: expectedAmount1,
                 lowerTick: liquidity[0].lowerTick,
@@ -108,14 +130,14 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
 
         (uint256 expectedAmount0, uint256 expectedAmount1) = (1 ether, 0);
 
-        assertEq(poolBalance0, expectedAmount0, "incorrect token0 deposited amount");
-        assertEq(poolBalance1, expectedAmount1, "incorrect token1 deposited amount");
+        assertEq(poolBalance0, expectedAmount0, "incorrect weth deposited amount");
+        assertEq(poolBalance1, expectedAmount1, "incorrect usdc deposited amount");
 
         assertMintState(
             ExpectedStateAfterMint({
                 pool: pool,
-                token0: token0,
-                token1: token1,
+                token0: weth,
+                token1: usdc,
                 amount0: expectedAmount0,
                 amount1: expectedAmount1,
                 lowerTick: liquidity[0].lowerTick,
@@ -148,17 +170,17 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         });
         setupTestCase(params);
 
-        (uint256 amount0, uint256 amount1) = (2.698571339742487358 ether, 13_501.317327786998874075 ether);
+        (uint256 amount0, uint256 amount1) = (2.72758041550084872 ether, 13_747.87182311273329981 ether);
 
         assertMintState(
             ExpectedStateAfterMint({
                 pool: pool,
-                token0: token0,
-                token1: token1,
+                token0: weth,
+                token1: usdc,
                 amount0: amount0,
                 amount1: amount1,
-                lowerTick: tick(4545),
-                upperTick: tick(5500),
+                lowerTick: tick60(4545),
+                upperTick: tick60(5500),
                 positionLiquidity: liquidity[0].amount,
                 currentLiquidity: liquidity[0].amount + liquidity[1].amount,
                 sqrtPriceX96: sqrtP(5000),
@@ -168,12 +190,12 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         assertMintState(
             ExpectedStateAfterMint({
                 pool: pool,
-                token0: token0,
-                token1: token1,
+                token0: weth,
+                token1: usdc,
                 amount0: amount0,
                 amount1: amount1,
-                lowerTick: tick(4000),
-                upperTick: tick(6250),
+                lowerTick: tick60(4000),
+                upperTick: tick60(6250),
                 positionLiquidity: liquidity[1].amount,
                 currentLiquidity: liquidity[0].amount + liquidity[1].amount,
                 sqrtPriceX96: sqrtP(5000),
@@ -183,21 +205,21 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     }
 
     function testMintInvalidTickRangeLower() public {
-        pool = new UniswapV3Pool(address(token0), address(token1), uint160(1), 0);
+        pool = deployPool(factory, address(weth), address(usdc), 60, 1);
 
         vm.expectRevert(encodeError("InvalidTickRange()"));
         pool.mint(address(this), -887_273, 0, 0, "");
     }
 
     function testMintInvalidTickRangeUpper() public {
-        pool = new UniswapV3Pool(address(token0), address(token1), uint160(1), 0);
+        pool = deployPool(factory, address(weth), address(usdc), 60, 1);
 
         vm.expectRevert(encodeError("InvalidTickRange()"));
         pool.mint(address(this), 0, 887_273, 0, "");
     }
 
     function testMintZeroLiquidity() public {
-        pool = new UniswapV3Pool(address(token0), address(token1), uint160(1), 0);
+        pool = deployPool(factory, address(weth), address(usdc), 60, 1);
 
         vm.expectRevert(encodeError("ZeroLiquidity()"));
         pool.mint(address(this), 0, 1, 0, "");
@@ -258,8 +280,8 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     function uniswapV3FlashCallback(bytes calldata data) public {
         (uint256 amount0, uint256 amount1) = abi.decode(data, (uint256, uint256));
 
-        if (amount0 > 0) token0.transfer(msg.sender, amount0);
-        if (amount1 > 0) token1.transfer(msg.sender, amount1);
+        if (amount0 > 0) weth.transfer(msg.sender, amount0);
+        if (amount1 > 0) usdc.transfer(msg.sender, amount1);
 
         flashCallbackCalled = true;
     }
@@ -274,21 +296,21 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         internal
         returns (uint256 poolBalance0, uint256 poolBalance1)
     {
-        token0.mint(address(this), params.wethBalance);
-        token1.mint(address(this), params.usdcBalance);
+        weth.mint(address(this), params.wethBalance);
+        usdc.mint(address(this), params.usdcBalance);
 
-        pool =
-            new UniswapV3Pool(address(token0), address(token1), sqrtP(params.currentPrice), tick(params.currentPrice));
+        pool = deployPool(factory, address(weth), address(usdc), 60, params.currentPrice);
 
         if (params.mintLiqudity) {
-            token0.approve(address(this), params.wethBalance);
-            token1.approve(address(this), params.usdcBalance);
+            weth.approve(address(this), params.wethBalance);
+            usdc.approve(address(this), params.usdcBalance);
 
-            bytes memory extra = encodeExtra(address(token0), address(token1), address(this));
+            bytes memory extra = encodeExtra(address(weth), address(usdc), address(this));
 
             uint256 poolBalance0Tmp;
             uint256 poolBalance1Tmp;
             for (uint256 i = 0; i < params.liquidity.length; i++) {
+                console2.log("UniswapV3PoolTest::setupTestCase::beforeMint");
                 (poolBalance0Tmp, poolBalance1Tmp) = pool.mint(
                     address(this),
                     params.liquidity[i].lowerTick,
@@ -296,6 +318,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
                     params.liquidity[i].amount,
                     extra
                 );
+                console2.log("UniswapV3PoolTest::setupTestCase::afterMint");
                 poolBalance0 += poolBalance0Tmp;
                 poolBalance1 += poolBalance1Tmp;
             }

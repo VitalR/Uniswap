@@ -2,35 +2,105 @@
 pragma solidity 0.8.25;
 
 import { IUniswapV3Pool } from "./interfaces/IUniswapV3Pool.sol";
+import { Path } from "src/libraries/Path.sol";
+import { PoolAddress } from "src/libraries/PoolAddress.sol";
 import { TickMath } from "./libraries/TickMath.sol";
 
 /// @title UniswapV3Quoter
 /// @notice A contract for quoting swap information from a Uniswap V3 pool.
+/// @dev This contract provides functions to simulate swaps and retrieve details like output amounts, post-swap prices,
+///      and ticks, without actually executing the swaps.
 contract UniswapV3Quoter {
-    struct QuoteParams {
-        address pool; // Address of the Uniswap V3 pool contract.
-        uint256 amountIn; // Input amount for the swap.
+    using Path for bytes;
+
+    /// @notice Struct containing parameters for a single-pool quote.
+    struct QuoteSingleParams {
+        /// @notice The address of the input token.
+        address tokenIn;
+        /// @notice The address of the output token.
+        address tokenOut;
+        /// @notice The tick spacing of the pool.
+        uint24 tickSpacing;
+        /// @notice The input amount of the swap.
+        uint256 amountIn;
+        /// @notice The sqrt price limit for the swap. Use `0` for default behavior.
         uint160 sqrtPriceLimitX96;
-        bool zeroForOne; // If true, token0 is the input, otherwise token1 is the input.
     }
 
-    /// @notice Quotes swap information from a Uniswap V3 pool.
-    /// @param params The parameters for the quote, including pool address, input amount, and swap direction.
+    /// @notice The address of the factory.
+    address public immutable factory;
+
+    /// @notice Constructor initializes the manager parameters.
+    /// @param _factory The address of the Uniswap V3 factory contract.
+    constructor(address _factory) {
+        factory = _factory;
+    }
+
+    /// @notice Quotes swap information for a multi-hop swap path.
+    /// @dev Iterates through the provided path, simulating swaps across multiple pools to calculate
+    ///      the output amount, post-swap sqrt prices, and ticks for each hop.
+    /// @param path The byte-encoded swap path.
+    /// @param amountIn The input amount of the swap.
+    /// @return amountOut The total output amount after completing all swaps.
+    /// @return sqrtPriceX96AfterList An array of sqrt prices after each swap in the path.
+    /// @return tickAfterList An array of ticks after each swap in the path.
+    function quote(bytes memory path, uint256 amountIn)
+        public
+        returns (uint256 amountOut, uint160[] memory sqrtPriceX96AfterList, int24[] memory tickAfterList)
+    {
+        sqrtPriceX96AfterList = new uint160[](path.numPools());
+        tickAfterList = new int24[](path.numPools());
+
+        uint256 i = 0;
+        while (true) {
+            (address tokenIn, address tokenOut, uint24 tickSpacing) = path.decodeFirstPool();
+
+            (uint256 amountOut_, uint160 sqrtPriceX96After, int24 tickAfter) = quoteSingle(
+                QuoteSingleParams({
+                    tokenIn: tokenIn,
+                    tokenOut: tokenOut,
+                    tickSpacing: tickSpacing,
+                    amountIn: amountIn,
+                    sqrtPriceLimitX96: 0
+                })
+            );
+
+            sqrtPriceX96AfterList[i] = sqrtPriceX96After;
+            tickAfterList[i] = tickAfter;
+            amountIn = amountOut_;
+            i++;
+
+            if (path.hasMultiplePools()) {
+                path = path.skipToken();
+            } else {
+                amountOut = amountIn;
+                break;
+            }
+        }
+    }
+
+    /// @notice Simulates a swap on a single Uniswap V3 pool and retrieves swap details.
+    /// @dev This function uses `try-catch` to handle swap simulations, decoding the results from revert reasons.
+    /// @param params The parameters for the quote, encapsulated in a `QuoteSingleParams` struct.
     /// @return amountOut The output amount of the swap.
-    /// @return sqrtPriceX96After The square root of the price after the swap.
+    /// @return sqrtPriceX96After The sqrt price after the swap.
     /// @return tickAfter The tick value after the swap.
-    function quote(QuoteParams memory params)
+    function quoteSingle(QuoteSingleParams memory params)
         public
         returns (uint256 amountOut, uint160 sqrtPriceX96After, int24 tickAfter)
     {
-        try IUniswapV3Pool(params.pool).swap(
+        IUniswapV3Pool pool = getPool(params.tokenIn, params.tokenOut, params.tickSpacing);
+
+        bool zeroForOne = params.tokenIn < params.tokenOut;
+
+        try pool.swap(
             address(this),
-            params.zeroForOne,
+            zeroForOne,
             params.amountIn,
             params.sqrtPriceLimitX96 == 0
-                ? (params.zeroForOne ? TickMath.MIN_SQRT_RATIO + 1 : TickMath.MAX_SQRT_RATIO - 1)
+                ? (zeroForOne ? TickMath.MIN_SQRT_RATIO + 1 : TickMath.MAX_SQRT_RATIO - 1)
                 : params.sqrtPriceLimitX96,
-            abi.encode(params.pool)
+            abi.encode(address(pool))
         ) { } catch (bytes memory reason) {
             return abi.decode(reason, (uint256, uint160, int24));
         }
@@ -56,5 +126,16 @@ contract UniswapV3Quoter {
             revert(ptr, 96) // Reverts the call and returns 96 bytes (total length of the values written to memory)
                 // of data at address ptr (start of the data written above).
         }
+    }
+
+    /// @notice Retrieves the address of a Uniswap V3 pool for the given tokens and tick spacing.
+    /// @dev Ensures that tokens are sorted (token0 < token1) before computing the pool address.
+    /// @param token0 The address of the first token.
+    /// @param token1 The address of the second token.
+    /// @param tickSpacing The tick spacing for the pool.
+    /// @return pool The address of the Uniswap V3 pool.
+    function getPool(address token0, address token1, uint24 tickSpacing) internal view returns (IUniswapV3Pool pool) {
+        (token0, token1) = token0 < token1 ? (token0, token1) : (token1, token0);
+        pool = IUniswapV3Pool(PoolAddress.computeAddress(factory, token0, token1, tickSpacing));
     }
 }

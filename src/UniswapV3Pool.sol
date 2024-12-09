@@ -144,10 +144,10 @@ contract UniswapV3Pool is IUniswapV3Pool {
         bool flippedUpper = ticks.update(upperTick, int128(amount), true);
 
         if (flippedLower) {
-            tickBitmap.flipTick(lowerTick, 1);
+            tickBitmap.flipTick(lowerTick, int24(tickSpacing));
         }
         if (flippedUpper) {
-            tickBitmap.flipTick(upperTick, 1);
+            tickBitmap.flipTick(upperTick, int24(tickSpacing));
         }
 
         Position.Info storage position = positions.get(owner, lowerTick, upperTick);
@@ -311,12 +311,11 @@ contract UniswapV3Pool is IUniswapV3Pool {
 
     /// @notice Executes a flash loan for token0 and/or token1.
     /// @dev Transfers the requested token amounts to the caller, then expects the full repayment with any additional
-    /// fees.
-    ///      This function ensures that the pool balance is restored after the flash loan is executed.
+    /// fees. This function ensures that the pool balance is restored after the flash loan is executed.
     /// @param amount0 The amount of token0 to flash loan to the caller.
     /// @param amount1 The amount of token1 to flash loan to the caller.
     /// @param data Encoded data passed to the callback function for custom logic execution by the caller.
-    ///             The callback function must handle repayment of the flash loan with any applicable fees.
+    /// The callback function must handle repayment of the flash loan with any applicable fees.
     function flash(uint256 amount0, uint256 amount1, bytes calldata data) public {
         uint256 balance0Before = IERC20(token0).balanceOf(address(this));
         uint256 balance1Before = IERC20(token1).balanceOf(address(this));
