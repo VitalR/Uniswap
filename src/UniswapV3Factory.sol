@@ -9,49 +9,52 @@ import { UniswapV3Pool } from "src/UniswapV3Pool.sol";
 /// @dev This contract allows creation of new Uniswap V3 pools with specific tokens and tick spacing.
 contract UniswapV3Factory is IUniswapV3PoolDeployer {
     /// @notice The parameters of the pool currently being deployed.
+    /// @dev These parameters are used during the creation of a new pool and cleared after deployment.
     PoolParameters public parameters;
 
-    /// @notice Supported tick spacings for pools.
-    mapping(uint24 => bool) public tickSpacings;
+    /// @notice A mapping of fee tiers to their corresponding tick spacings.
+    /// @dev Fee tiers must be registered in this mapping before pools with those fees can be created.
+    mapping(uint24 => uint24) public fees;
 
-    /// @notice A mapping of token pairs and tick spacing to their corresponding pool addresses.
-    /// @dev Pools are indexed by `[token0][token1][tickSpacing]`.
+    /// @notice A mapping of token pairs and fees to their corresponding pool addresses.
+    /// @dev Pools are indexed by `[token0][token1][fee]` where `token0` < `token1`.
     mapping(address => mapping(address => mapping(uint24 => address))) public pools;
 
-    /// @notice Constructor initializes supported tick spacings.
+    /// @notice Constructor initializes the factory with supported fee tiers and their tick spacings.
+    /// @dev Fee tiers of 500 and 3000 are initialized with tick spacings of 10 and 60, respectively.
     constructor() {
-        tickSpacings[10] = true;
-        tickSpacings[60] = true;
+        fees[500] = 10;
+        fees[3000] = 60;
     }
 
     /// @notice Creates a new Uniswap V3 pool with the specified parameters.
-    /// @dev Ensures tokens are different and sorted, and the pool doesn't already exist.
-    ///      Uses CREATE2 to deploy the pool contract deterministically.
+    /// @dev Ensures the tokens are different, sorted, and the pool does not already exist. Uses CREATE2 for
+    /// deterministic pool addresses.
     /// @param tokenX One of the tokens for the pool.
     /// @param tokenY The other token for the pool.
-    /// @param tickSpacing The tick spacing for the pool.
+    /// @param fee The fee tier for the pool, expressed in hundredths of a bip (e.g., 500 = 0.05%, 3000 = 0.3%).
     /// @return pool The address of the newly created pool.
-    function createPool(address tokenX, address tokenY, uint24 tickSpacing) public returns (address pool) {
+    function createPool(address tokenX, address tokenY, uint24 fee) public returns (address pool) {
         if (tokenX == tokenY) revert TokensMustBeDifferent();
-        if (!tickSpacings[tickSpacing]) revert UnsupportedTickSpacing();
+        if (fees[fee] == 0) revert UnsupportedFee();
 
         (tokenX, tokenY) = tokenX < tokenY ? (tokenX, tokenY) : (tokenY, tokenX);
 
         if (tokenX == address(0)) revert ZeroAddressNotAllowed();
-        if (pools[tokenX][tokenY][tickSpacing] != address(0)) {
+        if (pools[tokenX][tokenY][fee] != address(0)) {
             revert PoolAlreadyExists();
         }
 
         parameters =
-            PoolParameters({ factory: address(this), token0: tokenX, token1: tokenY, tickSpacing: tickSpacing });
+            PoolParameters({ factory: address(this), token0: tokenX, token1: tokenY, tickSpacing: fees[fee], fee: fee });
 
-        pool = address(new UniswapV3Pool{ salt: keccak256(abi.encodePacked(tokenX, tokenY, tickSpacing)) }());
+        pool = address(new UniswapV3Pool{ salt: keccak256(abi.encodePacked(tokenX, tokenY, fee)) }());
 
         delete parameters;
 
-        pools[tokenX][tokenY][tickSpacing] = pool;
-        pools[tokenY][tokenX][tickSpacing] = pool;
+        pools[tokenX][tokenY][fee] = pool;
+        pools[tokenY][tokenX][fee] = pool;
 
-        emit PoolCreated(tokenX, tokenY, tickSpacing, pool);
+        emit PoolCreated(tokenX, tokenY, fee, pool);
     }
 }

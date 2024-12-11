@@ -8,6 +8,7 @@ pragma solidity 0.8.25;
 interface IUniswapV3Pool {
     /// @dev Custom Errors
     error AlreadyInitialized();
+    error FlashLoanNotPaid();
     error InsufficientInputAmount();
     error InvalidTickRange();
     error InvalidPriceLimit();
@@ -65,6 +66,24 @@ interface IUniswapV3Pool {
     /// @param amount1 The amount of token1 borrowed in the flash loan.
     event Flash(address indexed sender, uint256 amount0, uint256 amount1);
 
+    event Burn(
+        address indexed owner,
+        int24 indexed tickLower,
+        int24 indexed tickUpper,
+        uint128 amount,
+        uint256 amount0,
+        uint256 amount1
+    );
+
+    event Collect(
+        address indexed owner,
+        address recipient,
+        int24 indexed tickLower,
+        int24 indexed tickUpper,
+        uint256 amount0,
+        uint256 amount1
+    );
+
     /// @notice Retrieves the current slot0 values from the Uniswap V3 pool.
     /// @return sqrtPriceX96 The square root of the price multiplied by 2^96.
     /// @return tick The current tick value.
@@ -75,6 +94,20 @@ interface IUniswapV3Pool {
 
     /// @notice Fetches the balance of token1 held by the pool.
     function token1() external view returns (address);
+
+    /// @notice Fetches the address of the factory that deployed this pool.
+    /// @return The address of the factory contract.
+    function factory() external view returns (address);
+
+    /// @notice Fetches the tick spacing for this pool.
+    /// @dev Tick spacing determines the granularity of tick initialization and price ranges.
+    /// @return The tick spacing as a `uint24` value.
+    function tickSpacing() external view returns (uint24);
+
+    /// @notice Fetches the fee tier for this pool.
+    /// @dev The fee is expressed in hundredths of a bip (e.g., 500 = 0.05%, 3000 = 0.3%).
+    /// @return The fee tier as a `uint24` value.
+    function fee() external view returns (uint24);
 
     /// @notice Mints liquidity for the given range in the pool.
     /// @param owner The address that will own the minted liquidity.
