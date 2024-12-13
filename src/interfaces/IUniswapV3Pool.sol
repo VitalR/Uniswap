@@ -24,6 +24,19 @@ interface IUniswapV3Pool {
         address payer;
     }
 
+    /// @notice Parameters required for modifying a liquidity position.
+    /// @dev Encapsulates all inputs necessary to add or remove liquidity from a position.
+    /// @param owner The address of the position owner.
+    /// @param lowerTick The lower tick of the position's range.
+    /// @param upperTick The upper tick of the position's range.
+    /// @param liquidityDelta The change in liquidity for the position. Positive to add, negative to remove.
+    struct ModifyPositionParams {
+        address owner;
+        int24 lowerTick;
+        int24 upperTick;
+        int128 liquidityDelta;
+    }
+
     /// @notice Emitted when liquidity is minted.
     /// @param sender The address that initiated the mint.
     /// @param owner The owner of the minted liquidity.
@@ -66,6 +79,13 @@ interface IUniswapV3Pool {
     /// @param amount1 The amount of token1 borrowed in the flash loan.
     event Flash(address indexed sender, uint256 amount0, uint256 amount1);
 
+    /// @notice Emitted when liquidity is burned from a position.
+    /// @param owner The address of the position owner.
+    /// @param tickLower The lower tick boundary of the position.
+    /// @param tickUpper The upper tick boundary of the position.
+    /// @param amount The amount of liquidity burned from the position.
+    /// @param amount0 The amount of token0 accounted for in the burn.
+    /// @param amount1 The amount of token1 accounted for in the burn.
     event Burn(
         address indexed owner,
         int24 indexed tickLower,
@@ -75,6 +95,13 @@ interface IUniswapV3Pool {
         uint256 amount1
     );
 
+    /// @notice Emitted when tokens are collected from a position.
+    /// @param owner The address of the position owner.
+    /// @param recipient The address that received the collected tokens.
+    /// @param tickLower The lower tick boundary of the position.
+    /// @param tickUpper The upper tick boundary of the position.
+    /// @param amount0 The amount of token0 collected.
+    /// @param amount1 The amount of token1 collected.
     event Collect(
         address indexed owner,
         address recipient,
@@ -84,10 +111,26 @@ interface IUniswapV3Pool {
         uint256 amount1
     );
 
+    /// @notice Emitted when the observation cardinality is increased.
+    /// @param observationCardinalityNextOld The previous observation cardinality.
+    /// @param observationCardinalityNextNew The updated observation cardinality.
+    event IncreaseObservationCardinalityNext(
+        uint16 observationCardinalityNextOld, uint16 observationCardinalityNextNew
+    );
+
     /// @notice Retrieves the current slot0 values from the Uniswap V3 pool.
     /// @return sqrtPriceX96 The square root of the price multiplied by 2^96.
     /// @return tick The current tick value.
-    function slot0() external view returns (uint160 sqrtPriceX96, int24 tick);
+    function slot0()
+        external
+        view
+        returns (
+            uint160 sqrtPriceX96,
+            int24 tick,
+            uint16 observationIndex,
+            uint16 observationCardinality,
+            uint16 observationCardinalityNext
+        );
 
     /// @notice Fetches the balance of token0 held by the pool.
     function token0() external view returns (address);
@@ -105,9 +148,32 @@ interface IUniswapV3Pool {
     function tickSpacing() external view returns (uint24);
 
     /// @notice Fetches the fee tier for this pool.
-    /// @dev The fee is expressed in hundredths of a bip (e.g., 500 = 0.05%, 3000 = 0.3%).
+    /// @dev The fee tier is expressed in hundredths of a bip (basis points).
+    ///      For example:
+    ///      - 500 is 0.05%.
+    ///      - 3000 is 0.3%.
     /// @return The fee tier as a `uint24` value.
     function fee() external view returns (uint24);
+
+    /// @notice Retrieves information about a specific position in the pool.
+    /// @dev The `key` is a hash of the position parameters:
+    ///      `keccak256(abi.encodePacked(owner, tickLower, tickUpper))`.
+    /// @param key The hash of the position's owner and tick range.
+    /// @return liquidity The amount of liquidity in the position.
+    /// @return feeGrowthInside0LastX128 The last recorded fee growth for token0 inside the tick range.
+    /// @return feeGrowthInside1LastX128 The last recorded fee growth for token1 inside the tick range.
+    /// @return tokensOwed0 The amount of token0 owed to the position owner.
+    /// @return tokensOwed1 The amount of token1 owed to the position owner.
+    function positions(bytes32 key)
+        external
+        view
+        returns (
+            uint128 liquidity,
+            uint256 feeGrowthInside0LastX128,
+            uint256 feeGrowthInside1LastX128,
+            uint128 tokensOwed0,
+            uint128 tokensOwed1
+        );
 
     /// @notice Mints liquidity for the given range in the pool.
     /// @param owner The address that will own the minted liquidity.

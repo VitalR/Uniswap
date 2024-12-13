@@ -13,6 +13,7 @@ import { IUniswapV3SwapCallback } from "./interfaces/IUniswapV3SwapCallback.sol"
 import { FixedPoint128 } from "./libraries/FixedPoint128.sol";
 import { LiquidityMath } from "./libraries/LiquidityMath.sol";
 import { Math } from "./libraries/Math.sol";
+import { Oracle } from "./libraries/Oracle.sol";
 import { Position } from "./libraries/Position.sol";
 import { SwapMath } from "./libraries/SwapMath.sol";
 import { Tick } from "./libraries/Tick.sol";
@@ -24,6 +25,7 @@ import { TickBitmap } from "./libraries/TickBitmap.sol";
 /// @dev This contract implements the core functionalities of a Uniswap V3 pool, including minting liquidity positions,
 /// executing token swaps within defined price ranges, and managing ticks and liquidity for efficient market making.
 contract UniswapV3Pool is IUniswapV3Pool {
+    using Oracle for Oracle.Observation[65_535];
     using Tick for mapping(int24 => Tick.Info);
     using TickBitmap for mapping(int16 => uint256);
     using Position for mapping(bytes32 => Position.Info);
@@ -56,6 +58,12 @@ contract UniswapV3Pool is IUniswapV3Pool {
         uint160 sqrtPriceX96;
         /// @notice The current tick of the pool.
         int24 tick;
+        // Most recent observation index
+        uint16 observationIndex;
+        // Maximum number of observations
+        uint16 observationCardinality;
+        // Next maximum number of observations
+        uint16 observationCardinalityNext;
     }
 
     /// @notice The current state of the pool.
@@ -103,6 +111,8 @@ contract UniswapV3Pool is IUniswapV3Pool {
     /// @notice Stores position information mapped by position hashes.
     mapping(bytes32 => Position.Info) public positions;
 
+    Oracle.Observation[65_535] public observations;
+
     ////////////////////////////////////////////////////////////////////////////
     //
     // CONSTRUCTOR & FUNCTIONS
@@ -122,7 +132,15 @@ contract UniswapV3Pool is IUniswapV3Pool {
 
         int24 _tick = TickMath.getTickAtSqrtRatio(_sqrtPriceX96);
 
-        slot0 = Slot0({ sqrtPriceX96: _sqrtPriceX96, tick: _tick });
+        (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(_blockTimestamp());
+
+        slot0 = Slot0({
+            sqrtPriceX96: _sqrtPriceX96,
+            tick: _tick,
+            observationIndex: 0,
+            observationCardinality: cardinality,
+            observationCardinalityNext: cardinalityNext
+        });
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -334,12 +352,22 @@ contract UniswapV3Pool is IUniswapV3Pool {
             }
         }
 
-        // since this operation writes to the contract’s storage, we want to do it only if the new tick is different,
-        // to optimize gas consumption.
+        //
         if (state.tick != _slot0.tick) {
-            (slot0.sqrtPriceX96, slot0.tick) = (state.sqrtPriceX96, state.tick);
-        }
+            (uint16 observationIndex, uint16 observationCardinality) = observations.write(
+                _slot0.observationIndex,
+                _blockTimestamp(),
+                _slot0.tick,
+                _slot0.observationCardinality,
+                _slot0.observationCardinalityNext
+            );
 
+            (slot0.sqrtPriceX96, slot0.tick, slot0.observationIndex, slot0.observationCardinality) =
+                (state.sqrtPriceX96, state.tick, observationIndex, observationCardinality);
+        } else {
+            slot0.sqrtPriceX96 = state.sqrtPriceX96;
+        }
+        //
         if (_liquidity != state.liquidity) liquidity = state.liquidity;
 
         // calculate swap amounts based on the swap direction and the amounts calculated during the swap loop
@@ -400,24 +428,28 @@ contract UniswapV3Pool is IUniswapV3Pool {
         emit Flash(msg.sender, amount0, amount1);
     }
 
+    function observe(uint32[] calldata secondsAgos) public view returns (int56[] memory tickCumulatives) {
+        return observations.observe(
+            _blockTimestamp(), secondsAgos, slot0.tick, slot0.observationIndex, slot0.observationCardinality
+        );
+    }
+
+    function increaseObservationCardinalityNext(uint16 observationCardinalityNext) public {
+        uint16 observationCardinalityNextOld = slot0.observationCardinalityNext;
+        uint16 observationCardinalityNextNew =
+            observations.grow(observationCardinalityNextOld, observationCardinalityNext);
+
+        if (observationCardinalityNextNew != observationCardinalityNextOld) {
+            slot0.observationCardinalityNext = observationCardinalityNextNew;
+            emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
+        }
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     //
     // INTERNAL
     //
     ////////////////////////////////////////////////////////////////////////////
-
-    /// @notice Parameters required for modifying a liquidity position.
-    /// @dev Encapsulates all inputs necessary to add or remove liquidity from a position.
-    /// @param owner The address of the position owner.
-    /// @param lowerTick The lower tick of the position's range.
-    /// @param upperTick The upper tick of the position's range.
-    /// @param liquidityDelta The change in liquidity for the position. Positive to add, negative to remove.
-    struct ModifyPositionParams {
-        address owner;
-        int24 lowerTick;
-        int24 upperTick;
-        int128 liquidityDelta;
-    }
 
     /// @notice Modifies the liquidity of a position by adding or removing liquidity.
     /// @dev This function updates the position and associated ticks based on the liquidity delta.
@@ -431,7 +463,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
         returns (Position.Info storage position, int256 amount0, int256 amount1)
     {
         // Gas optimizations: Load frequently used values into memory.
-        Slot0 memory slot0_ = slot0;
+        Slot0 memory _slot0 = slot0;
         uint256 feeGrowthGlobal0X128_ = feeGrowthGlobal0X128;
         uint256 feeGrowthGlobal1X128_ = feeGrowthGlobal1X128;
 
@@ -441,7 +473,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
         // Update the lower and upper ticks with the liquidity change.
         bool flippedLower = ticks.update(
             params.lowerTick,
-            slot0_.tick,
+            _slot0.tick,
             int128(params.liquidityDelta),
             feeGrowthGlobal0X128_,
             feeGrowthGlobal1X128_,
@@ -449,7 +481,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
         );
         bool flippedUpper = ticks.update(
             params.upperTick,
-            slot0_.tick,
+            _slot0.tick,
             int128(params.liquidityDelta),
             feeGrowthGlobal0X128_,
             feeGrowthGlobal1X128_,
@@ -466,26 +498,26 @@ contract UniswapV3Pool is IUniswapV3Pool {
 
         // Calculate fee growth inside the tick range.
         (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = ticks.getFeeGrowthInside(
-            params.lowerTick, params.upperTick, slot0_.tick, feeGrowthGlobal0X128_, feeGrowthGlobal1X128_
+            params.lowerTick, params.upperTick, _slot0.tick, feeGrowthGlobal0X128_, feeGrowthGlobal1X128_
         );
 
         // Update the position with the calculated fee growth and liquidity change.
         position.update(params.liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
 
         // Calculate the token amounts owed based on the current and target ticks.
-        if (slot0_.tick < params.lowerTick) {
+        if (_slot0.tick < params.lowerTick) {
             amount0 = Math.calcAmount0Delta(
                 TickMath.getSqrtRatioAtTick(params.lowerTick),
                 TickMath.getSqrtRatioAtTick(params.upperTick),
                 params.liquidityDelta
             );
-        } else if (slot0_.tick < params.upperTick) {
+        } else if (_slot0.tick < params.upperTick) {
             amount0 = Math.calcAmount0Delta(
-                slot0_.sqrtPriceX96, TickMath.getSqrtRatioAtTick(params.upperTick), params.liquidityDelta
+                _slot0.sqrtPriceX96, TickMath.getSqrtRatioAtTick(params.upperTick), params.liquidityDelta
             );
 
             amount1 = Math.calcAmount1Delta(
-                TickMath.getSqrtRatioAtTick(params.lowerTick), slot0_.sqrtPriceX96, params.liquidityDelta
+                TickMath.getSqrtRatioAtTick(params.lowerTick), _slot0.sqrtPriceX96, params.liquidityDelta
             );
 
             liquidity = LiquidityMath.addLiquidity(liquidity, params.liquidityDelta);
@@ -508,5 +540,9 @@ contract UniswapV3Pool is IUniswapV3Pool {
     /// @return balance The balance of token1.
     function balance1() internal view returns (uint256 balance) {
         balance = IERC20(token1).balanceOf(address(this));
+    }
+
+    function _blockTimestamp() internal view returns (uint32 timestamp) {
+        timestamp = uint32(block.timestamp);
     }
 }

@@ -19,8 +19,8 @@ contract UniswapV3Quoter {
         address tokenIn;
         /// @notice The address of the output token.
         address tokenOut;
-        /// @notice The tick spacing of the pool.
-        uint24 tickSpacing;
+        /// @notice The fee of the pool.
+        uint24 fee;
         /// @notice The input amount of the swap.
         uint256 amountIn;
         /// @notice The sqrt price limit for the swap. Use `0` for default behavior.
@@ -53,13 +53,13 @@ contract UniswapV3Quoter {
 
         uint256 i = 0;
         while (true) {
-            (address tokenIn, address tokenOut, uint24 tickSpacing) = path.decodeFirstPool();
+            (address tokenIn, address tokenOut, uint24 fee) = path.decodeFirstPool();
 
             (uint256 amountOut_, uint160 sqrtPriceX96After, int24 tickAfter) = quoteSingle(
                 QuoteSingleParams({
                     tokenIn: tokenIn,
                     tokenOut: tokenOut,
-                    tickSpacing: tickSpacing,
+                    fee: fee,
                     amountIn: amountIn,
                     sqrtPriceLimitX96: 0
                 })
@@ -89,7 +89,7 @@ contract UniswapV3Quoter {
         public
         returns (uint256 amountOut, uint160 sqrtPriceX96After, int24 tickAfter)
     {
-        IUniswapV3Pool pool = getPool(params.tokenIn, params.tokenOut, params.tickSpacing);
+        IUniswapV3Pool pool = getPool(params.tokenIn, params.tokenOut, params.fee);
 
         bool zeroForOne = params.tokenIn < params.tokenOut;
 
@@ -115,7 +115,7 @@ contract UniswapV3Quoter {
         // Collecting values: output amount, new price, and corresponding tick
         uint256 amountOut = amount0Delta > 0 ? uint256(-amount1Delta) : uint256(-amount0Delta);
 
-        (uint160 sqrtPriceX96After, int24 tickAfter) = IUniswapV3Pool(pool).slot0();
+        (uint160 sqrtPriceX96After, int24 tickAfter,,,) = IUniswapV3Pool(pool).slot0();
 
         // Save values and revert
         assembly {

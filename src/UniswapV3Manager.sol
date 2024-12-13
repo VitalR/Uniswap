@@ -39,10 +39,10 @@ contract UniswapV3Manager is IUniswapV3Manager {
     /// @return amount0 The actual amount of token0 used to mint the liquidity.
     /// @return amount1 The actual amount of token1 used to mint the liquidity.
     function mint(MintParams calldata params) public returns (uint256 amount0, uint256 amount1) {
-        address poolAddress = PoolAddress.computeAddress(factory, params.tokenA, params.tokenB, params.tickSpacing);
+        address poolAddress = PoolAddress.computeAddress(factory, params.tokenA, params.tokenB, params.fee);
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
 
-        (uint160 sqrtPriceX96,) = pool.slot0();
+        (uint160 sqrtPriceX96,,,,) = pool.slot0();
         uint160 sqrtPriceLowerX96 = TickMath.getSqrtRatioAtTick(params.lowerTick);
         uint160 sqrtPriceUpperX96 = TickMath.getSqrtRatioAtTick(params.upperTick);
 
@@ -68,7 +68,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
     /// @param params The parameters for the swap, encapsulated in a `SwapSingleParams` struct:
     ///        - tokenIn: The address of the input token.
     ///        - tokenOut: The address of the output token.
-    ///        - tickSpacing: The tick spacing of the pool.
+    ///        - fee: The fee of the pool.
     ///        - amountIn: The amount of the input token to swap.
     ///        - sqrtPriceLimitX96: The sqrt price limit for the swap. Use 0 for default behavior.
     /// @return amountOut The amount of the output token received from the swap.
@@ -77,10 +77,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
             params.amountIn,
             msg.sender,
             params.sqrtPriceLimitX96,
-            SwapCallbackData({
-                path: abi.encodePacked(params.tokenIn, params.tickSpacing, params.tokenOut),
-                payer: msg.sender
-            })
+            SwapCallbackData({ path: abi.encodePacked(params.tokenIn, params.fee, params.tokenOut), payer: msg.sender })
         );
     }
 
@@ -160,6 +157,37 @@ contract UniswapV3Manager is IUniswapV3Manager {
     function getPool(address token0, address token1, uint24 tickSpacing) internal view returns (IUniswapV3Pool pool) {
         (token0, token1) = token0 < token1 ? (token0, token1) : (token1, token0);
         pool = IUniswapV3Pool(PoolAddress.computeAddress(factory, token0, token1, tickSpacing));
+    }
+
+    /// @notice Retrieves position information for a specific liquidity position in a Uniswap V3 pool.
+    /// @dev Queries the pool's `positions` mapping to fetch details about the specified position.
+    /// @param params The parameters for retrieving the position, encapsulated in `GetPositionParams`.
+    ///        - `owner`: The address of the position owner.
+    ///        - `tokenA`: The address of one token in the pair.
+    ///        - `tokenB`: The address of the other token in the pair.
+    ///        - `fee`: The fee tier of the pool (e.g., 500 for 0.05% fee).
+    ///        - `lowerTick`: The lower tick of the position.
+    ///        - `upperTick`: The upper tick of the position.
+    /// @return liquidity The amount of liquidity in the position.
+    /// @return feeGrowthInside0LastX128 The last recorded fee growth for token0 inside the tick range.
+    /// @return feeGrowthInside1LastX128 The last recorded fee growth for token1 inside the tick range.
+    /// @return tokensOwed0 The amount of token0 owed to the position owner.
+    /// @return tokensOwed1 The amount of token1 owed to the position owner.
+    function getPosition(GetPositionParams calldata params)
+        public
+        view
+        returns (
+            uint128 liquidity,
+            uint256 feeGrowthInside0LastX128,
+            uint256 feeGrowthInside1LastX128,
+            uint128 tokensOwed0,
+            uint128 tokensOwed1
+        )
+    {
+        IUniswapV3Pool pool = getPool(params.tokenA, params.tokenB, params.fee);
+
+        (liquidity, feeGrowthInside0LastX128, feeGrowthInside1LastX128, tokensOwed0, tokensOwed1) =
+            pool.positions(keccak256(abi.encodePacked(params.owner, params.lowerTick, params.upperTick)));
     }
 
     /// @notice Callback function for handling mint callbacks from a Uniswap V3 pool.
