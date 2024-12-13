@@ -9,21 +9,15 @@ import { UniswapV3Pool, IUniswapV3Pool } from "src/UniswapV3Pool.sol";
 import { UniswapV3Factory } from "src/UniswapV3Factory.sol";
 import { FixedPoint96 } from "src/libraries/FixedPoint96.sol";
 import { TickMath } from "src/libraries/TickMath.sol";
-import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
 
-abstract contract TestUtils is Test {
-    struct ExpectedStateAfterMint {
-        UniswapV3Pool pool;
-        ERC20Mock token0;
-        ERC20Mock token1;
-        uint256 amount0;
-        uint256 amount1;
-        int24 lowerTick;
-        int24 upperTick;
-        uint128 positionLiquidity;
-        uint128 currentLiquidity;
-        uint160 sqrtPriceX96;
-        int24 tick;
+import { Assertions, ERC20Mock } from "test/utils/Assertions.sol";
+
+abstract contract TestUtils is Test, Assertions {
+    mapping(uint24 => uint24) internal tickSpacings;
+
+    constructor() {
+        tickSpacings[500] = 10;
+        tickSpacings[3000] = 60;
     }
 
     function divRound(int128 x, int128 y) internal pure returns (int128 result) {
@@ -77,72 +71,6 @@ abstract contract TestUtils is Test {
         tick_ = nearestUsableTick(tick_, tickSpacing);
     }
 
-    function assertMintState(ExpectedStateAfterMint memory expected) internal {
-        assertEq(
-            expected.token0.balanceOf(address(expected.pool)), expected.amount0, "incorrect token0 balance of pool"
-        );
-        assertEq(
-            expected.token1.balanceOf(address(expected.pool)), expected.amount1, "incorrect token1 balance of pool"
-        );
-
-        bytes32 positionKey = keccak256(abi.encodePacked(address(this), expected.lowerTick, expected.upperTick));
-        uint128 posLiquidity = expected.pool.positions(positionKey);
-        assertEq(posLiquidity, expected.positionLiquidity, "incorrect position liquidity");
-
-        (bool tickInitialized, uint128 tickLiquidityGross, int128 tickLiquidityNet) =
-            expected.pool.ticks(expected.lowerTick);
-        assertTrue(tickInitialized);
-        assertEq(tickLiquidityGross, expected.positionLiquidity, "incorrect lower tick gross liquidity");
-        assertEq(tickLiquidityNet, int128(expected.positionLiquidity), "incorrect lower tick net liquidity");
-
-        (tickInitialized, tickLiquidityGross, tickLiquidityNet) = expected.pool.ticks(expected.upperTick);
-        assertTrue(tickInitialized);
-        assertEq(tickLiquidityGross, expected.positionLiquidity, "incorrect upper tick gross liquidity");
-        assertEq(tickLiquidityNet, -int128(expected.positionLiquidity), "incorrect upper tick net liquidity");
-
-        assertTrue(tickInBitMap(expected.pool, expected.lowerTick));
-        assertTrue(tickInBitMap(expected.pool, expected.upperTick));
-
-        (uint160 sqrtPriceX96, int24 currentTick) = expected.pool.slot0();
-        assertEq(sqrtPriceX96, expected.sqrtPriceX96, "invalid current sqrtP");
-        assertEq(currentTick, expected.tick, "invalid current tick");
-        assertEq(expected.pool.liquidity(), expected.currentLiquidity, "invalid current liquidity");
-    }
-
-    struct ExpectedStateAfterSwap {
-        UniswapV3Pool pool;
-        ERC20Mock token0;
-        ERC20Mock token1;
-        uint256 userBalance0;
-        uint256 userBalance1;
-        uint256 poolBalance0;
-        uint256 poolBalance1;
-        uint160 sqrtPriceX96;
-        int24 tick;
-        uint128 currentLiquidity;
-    }
-
-    function assertSwapState(ExpectedStateAfterSwap memory expected) internal {
-        assertEq(expected.token0.balanceOf(address(this)), uint256(expected.userBalance0), "invalid user ETH balance");
-        assertEq(expected.token1.balanceOf(address(this)), uint256(expected.userBalance1), "invalid user USDC balance");
-
-        assertEq(
-            expected.token0.balanceOf(address(expected.pool)),
-            uint256(expected.poolBalance0),
-            "invalid pool ETH balance"
-        );
-        assertEq(
-            expected.token1.balanceOf(address(expected.pool)),
-            uint256(expected.poolBalance1),
-            "invalid pool USDC balance"
-        );
-
-        (uint160 sqrtPriceX96, int24 currentTick) = expected.pool.slot0();
-        assertEq(sqrtPriceX96, expected.sqrtPriceX96, "invalid current sqrtP");
-        assertEq(currentTick, expected.tick, "invalid current tick");
-        assertEq(expected.pool.liquidity(), expected.currentLiquidity, "invalid current liquidity");
-    }
-
     function encodeError(string memory error) internal pure returns (bytes memory encoded) {
         encoded = abi.encodeWithSignature(error);
     }
@@ -153,17 +81,6 @@ abstract contract TestUtils is Test {
 
     function encodeExtra(address token0_, address token1_, address payer) internal pure returns (bytes memory) {
         return abi.encode(IUniswapV3Pool.CallbackData({ token0: token0_, token1: token1_, payer: payer }));
-    }
-
-    function tickInBitMap(UniswapV3Pool pool, int24 tick_) internal view returns (bool initialized) {
-        tick_ /= int24(pool.tickSpacing());
-
-        int16 wordPos = int16(tick_ >> 8);
-        uint8 bitPos = uint8(uint24(tick_ % 256));
-
-        uint256 word = pool.tickBitmap(wordPos);
-
-        initialized = (word & (1 << bitPos)) != 0;
     }
 
     function mintParams(
@@ -177,7 +94,7 @@ abstract contract TestUtils is Test {
         params = IUniswapV3Manager.MintParams({
             tokenA: tokenA,
             tokenB: tokenB,
-            tickSpacing: 60,
+            fee: 3000,
             lowerTick: tick60(lowerPrice),
             upperTick: tick60(upperPrice),
             amount0Desired: amount0,
@@ -194,14 +111,14 @@ abstract contract TestUtils is Test {
         uint160 upperSqrtP,
         uint256 amount0,
         uint256 amount1,
-        uint24 tickSpacing
-    ) internal pure returns (IUniswapV3Manager.MintParams memory params) {
+        uint24 fee
+    ) internal view returns (IUniswapV3Manager.MintParams memory params) {
         params = IUniswapV3Manager.MintParams({
             tokenA: tokenA,
             tokenB: tokenB,
-            tickSpacing: tickSpacing,
-            lowerTick: sqrtPToNearestTick(lowerSqrtP, tickSpacing),
-            upperTick: sqrtPToNearestTick(upperSqrtP, tickSpacing),
+            fee: fee,
+            lowerTick: sqrtPToNearestTick(lowerSqrtP, tickSpacings[fee]),
+            upperTick: sqrtPToNearestTick(upperSqrtP, tickSpacings[fee]),
             amount0Desired: amount0,
             amount1Desired: amount1,
             amount0Min: 0,
@@ -209,14 +126,11 @@ abstract contract TestUtils is Test {
         });
     }
 
-    function deployPool(
-        UniswapV3Factory factory,
-        address token0,
-        address token1,
-        uint24 tickSpacing,
-        uint256 currentPrice
-    ) internal returns (UniswapV3Pool pool) {
-        pool = UniswapV3Pool(factory.createPool(token0, token1, tickSpacing));
+    function deployPool(UniswapV3Factory factory, address token0, address token1, uint24 fee, uint256 currentPrice)
+        internal
+        returns (UniswapV3Pool pool)
+    {
+        pool = UniswapV3Pool(factory.createPool(token0, token1, fee));
         pool.initialize(sqrtP(currentPrice));
     }
 }
