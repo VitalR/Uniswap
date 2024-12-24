@@ -4,7 +4,10 @@ pragma solidity 0.8.25;
 import "forge-std/Test.sol";
 
 import { UniswapV3Pool } from "src/UniswapV3Pool.sol";
+import { UniswapV3NFTManager } from "src/UniswapV3NFTManager.sol";
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
+
+import "lib/forge-std/src/console2.sol";
 
 abstract contract Assertions is Test {
     struct ExpectedPoolState {
@@ -146,6 +149,7 @@ abstract contract Assertions is Test {
         assertPosition(
             ExpectedPosition({
                 pool: expected.pool,
+                owner: expected.position.owner,
                 ticks: expected.position.ticks,
                 liquidity: expected.position.liquidity,
                 feeGrowth: expected.position.feeGrowth,
@@ -231,6 +235,7 @@ abstract contract Assertions is Test {
         assertPosition(
             ExpectedPosition({
                 pool: expected.pool,
+                owner: expected.position.owner,
                 ticks: expected.position.ticks,
                 liquidity: expected.position.liquidity,
                 feeGrowth: expected.position.feeGrowth,
@@ -261,6 +266,7 @@ abstract contract Assertions is Test {
 
     struct ExpectedPosition {
         UniswapV3Pool pool;
+        address owner;
         int24[2] ticks;
         uint128 liquidity;
         uint256[2] feeGrowth;
@@ -268,6 +274,7 @@ abstract contract Assertions is Test {
     }
 
     struct ExpectedPositionShort {
+        address owner;
         int24[2] ticks;
         uint128 liquidity;
         uint256[2] feeGrowth;
@@ -275,7 +282,7 @@ abstract contract Assertions is Test {
     }
 
     function assertPosition(ExpectedPosition memory params) public {
-        bytes32 positionKey = keccak256(abi.encodePacked(address(this), params.ticks[0], params.ticks[1]));
+        bytes32 positionKey = keccak256(abi.encodePacked(params.owner, params.ticks[0], params.ticks[1]));
         (
             uint128 liquidity,
             uint256 feeGrowthInside0LastX128,
@@ -284,11 +291,52 @@ abstract contract Assertions is Test {
             uint128 tokensOwed1
         ) = params.pool.positions(positionKey);
 
+        console2.log("assertPosition::liquidity ", liquidity);
+        console2.log("assertPosition::tokensOwed0 ", tokensOwed0);
+        console2.log("assertPosition::tokensOwed1 ", tokensOwed1);
+
+
         assertEq(liquidity, params.liquidity, "incorrect position liquidity");
         assertEq(feeGrowthInside0LastX128, params.feeGrowth[0], "incorrect position fee growth for token0");
         assertEq(feeGrowthInside1LastX128, params.feeGrowth[1], "incorrect position fee growth for token1");
         assertEq(tokensOwed0, params.tokensOwed[0], "incorrect position tokens owed for token0");
         assertEq(tokensOwed1, params.tokensOwed[1], "incorrect position tokens owed for token1");
+    }
+
+    struct ExpectedNFTs {
+        UniswapV3NFTManager nft;
+        address owner;
+        ExpectedNFT[] tokens;
+    }
+
+    struct ExpectedNFT {
+        uint256 id;
+        address pool;
+        int24 lowerTick;
+        int24 upperTick;
+    }
+
+    function assertNFTs(ExpectedNFTs memory expected) internal {
+        assertEq(expected.nft.balanceOf(address(expected.owner)), expected.tokens.length, "invalid NFT balance");
+        assertEq(expected.nft.totalSupply(), expected.tokens.length, "invalid NFT total supply");
+
+        for (uint256 i = 0; i < expected.tokens.length; ++i) {
+            ExpectedNFT memory token = expected.tokens[i];
+
+            assertEq(expected.nft.ownerOf(token.id), expected.owner, "invalid NFT owner");
+
+            (address pool, int24 lowerTick, int24 upperTick) = expected.nft.positions(token.id);
+
+            assertEq(pool, token.pool, "invalid NFT position pool");
+            assertEq(lowerTick, token.lowerTick, "invalid NFT position lower tick");
+            assertEq(upperTick, token.upperTick, "invalid NFT position upper tick");
+        }
+    }
+
+    function assertTokenURI(string memory actual, string memory expectedFixture, string memory errMessage) internal {
+        string memory expected = vm.readFile(string.concat("./test/fixtures/", expectedFixture));
+
+        assertEq(actual, string(expected), errMessage);
     }
 
     function tickInBitMap(UniswapV3Pool pool, int24 tick_) internal view returns (bool initialized) {

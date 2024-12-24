@@ -187,6 +187,36 @@ interface IUniswapV3Pool {
         external
         returns (uint256 amount0, uint256 amount1);
 
+    /// @notice Burns a specified amount of liquidity from a Uniswap V3 position.
+    /// @dev Removes liquidity from the specified tick range and updates the position.
+    ///      The resulting amounts of token0 and token1 are returned.
+    /// @param lowerTick The lower tick of the liquidity range to burn.
+    /// @param upperTick The upper tick of the liquidity range to burn.
+    /// @param amount The amount of liquidity to burn.
+    /// @return amount0 The amount of token0 received as a result of burning the liquidity.
+    /// @return amount1 The amount of token1 received as a result of burning the liquidity.
+    function burn(int24 lowerTick, int24 upperTick, uint128 amount)
+        external
+        returns (uint256 amount0, uint256 amount1);
+
+    /// @notice Collects accrued fees from a Uniswap V3 position.
+    /// @dev Transfers the specified amounts of token0 and token1 from the position to the recipient.
+    ///      If the requested amounts exceed the available amounts, only the available amounts are transferred.
+    /// @param recipient The address that will receive the collected tokens.
+    /// @param lowerTick The lower tick of the position's range.
+    /// @param upperTick The upper tick of the position's range.
+    /// @param amount0Requested The maximum amount of token0 to collect.
+    /// @param amount1Requested The maximum amount of token1 to collect.
+    /// @return amount0 The actual amount of token0 collected.
+    /// @return amount1 The actual amount of token1 collected.
+    function collect(
+        address recipient,
+        int24 lowerTick,
+        int24 upperTick,
+        uint128 amount0Requested,
+        uint128 amount1Requested
+    ) external returns (uint128 amount0, uint128 amount1);
+
     /// @notice Swaps tokens within the pool.
     /// @param recipient The address to receive the swapped tokens.
     /// @param zeroForOne If true, token0 is swapped for token1; otherwise, token1 is swapped for token0.

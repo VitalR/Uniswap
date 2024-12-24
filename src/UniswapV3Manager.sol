@@ -39,9 +39,8 @@ contract UniswapV3Manager is IUniswapV3Manager {
     /// @return amount0 The actual amount of token0 used to mint the liquidity.
     /// @return amount1 The actual amount of token1 used to mint the liquidity.
     function mint(MintParams calldata params) public returns (uint256 amount0, uint256 amount1) {
-        address poolAddress = PoolAddress.computeAddress(factory, params.tokenA, params.tokenB, params.fee);
-        IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
-
+        IUniswapV3Pool pool = getPool(params.tokenA, params.tokenB, params.fee);
+        
         (uint160 sqrtPriceX96,,,,) = pool.slot0();
         uint160 sqrtPriceLowerX96 = TickMath.getSqrtRatioAtTick(params.lowerTick);
         uint160 sqrtPriceUpperX96 = TickMath.getSqrtRatioAtTick(params.upperTick);

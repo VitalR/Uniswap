@@ -82,6 +82,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
                 userBalances: [1 ether - expectedAmount0, 5000 ether - expectedAmount1],
                 poolBalances: [expectedAmount0, expectedAmount1],
                 position: ExpectedPositionShort({
+                    owner: address(this),
                     ticks: [liquidity[0].lowerTick, liquidity[0].upperTick],
                     liquidity: liquidity[0].amount,
                     feeGrowth: [uint256(0), 0],
@@ -121,6 +122,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
                 userBalances: [1 ether - expectedAmount0, 5000 ether - expectedAmount1],
                 poolBalances: [expectedAmount0, expectedAmount1],
                 position: ExpectedPositionShort({
+                    owner: address(this),
                     ticks: [liquidity[0].lowerTick, liquidity[0].upperTick],
                     liquidity: liquidity[0].amount,
                     feeGrowth: [uint256(0), 0],
@@ -160,6 +162,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
                 userBalances: [1 ether - expectedAmount0, 5000 ether - expectedAmount1],
                 poolBalances: [expectedAmount0, expectedAmount1],
                 position: ExpectedPositionShort({
+                    owner: address(this),
                     ticks: [liquidity[0].lowerTick, liquidity[0].upperTick],
                     liquidity: liquidity[0].amount,
                     feeGrowth: [uint256(0), 0],
@@ -210,6 +213,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
             ExpectedPositionAndTicks({
                 pool: pool,
                 position: ExpectedPositionShort({
+                    owner: address(this),
                     ticks: [liquidity[0].lowerTick, liquidity[0].upperTick],
                     liquidity: liquidity[0].amount,
                     feeGrowth: [uint256(0), 0],
@@ -223,6 +227,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
             ExpectedPositionAndTicks({
                 pool: pool,
                 position: ExpectedPositionShort({
+                    owner: address(this),
                     ticks: [liquidity[1].lowerTick, liquidity[1].upperTick],
                     liquidity: liquidity[1].amount,
                     feeGrowth: [uint256(0), 0],
@@ -268,6 +273,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
                 userBalances: [1 ether - expectedAmount0 - 1, 5000 ether - expectedAmount1 - 1],
                 poolBalances: [expectedAmount0 + 1, expectedAmount1 + 1],
                 position: ExpectedPositionShort({
+                    owner: address(this),
                     ticks: [liquidity[0].lowerTick, liquidity[0].upperTick],
                     liquidity: 0,
                     feeGrowth: [uint256(0), 0],
@@ -323,6 +329,7 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
                 userBalances: [1 ether - poolBalance0, 5000 ether - poolBalance1],
                 poolBalances: [poolBalance0, poolBalance1],
                 position: ExpectedPositionShort({
+                    owner: address(this),
                     ticks: [liquidity[0].lowerTick, liquidity[0].upperTick],
                     liquidity: liquidity[0].amount / 2 + 1,
                     feeGrowth: [uint256(0), 0],
