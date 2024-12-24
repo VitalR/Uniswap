@@ -3,6 +3,7 @@ src = "src"
 out = "out"
 libs = ["lib"]
 gas_reports_ignore = ["test", "script"]
+fs_permissions = [{ access = "read", path = "./" }]
 
 remappings = [
     "forge-std/=lib/forge-std/src/",
