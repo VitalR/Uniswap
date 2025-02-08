@@ -367,8 +367,14 @@ contract UniswapV3Pool is IUniswapV3Pool {
         } else {
             slot0.sqrtPriceX96 = state.sqrtPriceX96;
         }
-        //
+
         if (_liquidity != state.liquidity) liquidity = state.liquidity;
+
+        if (zeroForOne) {
+            feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
+        } else {
+            feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
+        }
 
         // calculate swap amounts based on the swap direction and the amounts calculated during the swap loop
         (amount0, amount1) = zeroForOne
