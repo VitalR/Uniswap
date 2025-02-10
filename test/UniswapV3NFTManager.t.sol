@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import { Test, stdError } from "forge-std/Test.sol";
+import { Test, stdError, console2 } from "forge-std/Test.sol";
 
 import { LiquidityMath } from "src/libraries/LiquidityMath.sol";
 import { UniswapV3Factory } from "src/UniswapV3Factory.sol";
@@ -9,8 +9,6 @@ import { UniswapV3NFTManager } from "src/UniswapV3NFTManager.sol";
 import { UniswapV3Pool } from "src/UniswapV3Pool.sol";
 import { TestUtils } from "test/utils/TestUtils.sol";
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
-
-import "lib/forge-std/src/console2.sol";
 
 contract UniswapV3NFTManagerTest is Test, TestUtils {
     uint24 constant FEE = 3000;
@@ -252,8 +250,8 @@ contract UniswapV3NFTManagerTest is Test, TestUtils {
         });
 
         (uint256 amount0Removed, uint256 amount1Removed) = nft.removeLiquidity(removeParams);
-        console2.log("testRemoveLiquidity::amount0Removed ", amount0Removed);
-        console2.log("testRemoveLiquidity::amount1Removed ", amount1Removed);
+        // console2.log("testRemoveLiquidity::amount0Removed ", amount0Removed);
+        // console2.log("testRemoveLiquidity::amount1Removed ", amount1Removed);
 
 
         assertEq(tokenId, 0, "invalid token id");
@@ -321,8 +319,8 @@ contract UniswapV3NFTManagerTest is Test, TestUtils {
         });
 
         (uint256 amount0Removed, uint256 amount1Removed) = nft.removeLiquidity(removeParams);
-        console2.log("testCollect::amount0Removed ", amount0Removed);
-        console2.log("testCollect::amount1Removed ", amount1Removed);
+        // console2.log("testCollect::amount0Removed ", amount0Removed);
+        // console2.log("testCollect::amount1Removed ", amount1Removed);
 
         (uint128 amount0Collected, uint128 amount1Collected) = nft.collect(
             UniswapV3NFTManager.CollectParams({
@@ -331,8 +329,8 @@ contract UniswapV3NFTManagerTest is Test, TestUtils {
                 amount1: uint128(amount1Removed)
             })
         );
-        console2.log("testCollect::amount0Collected ", amount0Collected);
-        console2.log("testCollect::amount1Collected ", amount1Collected);
+        // console2.log("testCollect::amount0Collected ", amount0Collected);
+        // console2.log("testCollect::amount1Collected ", amount1Collected);
 
         assertEq(tokenId, 0, "invalid token id");
         assertEq(amount0Collected, 0.493539174222068722 ether, "invalid removed token0 amount");

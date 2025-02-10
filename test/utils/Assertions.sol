@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import "forge-std/Test.sol";
+import { Test, stdError, console2 } from "forge-std/Test.sol";
 
 import { UniswapV3Pool } from "src/UniswapV3Pool.sol";
 import { UniswapV3NFTManager } from "src/UniswapV3NFTManager.sol";
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
-
-import "lib/forge-std/src/console2.sol";
 
 abstract contract Assertions is Test {
     struct ExpectedPoolState {
@@ -290,11 +288,6 @@ abstract contract Assertions is Test {
             uint128 tokensOwed0,
             uint128 tokensOwed1
         ) = params.pool.positions(positionKey);
-
-        console2.log("assertPosition::liquidity ", liquidity);
-        console2.log("assertPosition::tokensOwed0 ", tokensOwed0);
-        console2.log("assertPosition::tokensOwed1 ", tokensOwed1);
-
 
         assertEq(liquidity, params.liquidity, "incorrect position liquidity");
         assertEq(feeGrowthInside0LastX128, params.feeGrowth[0], "incorrect position fee growth for token0");

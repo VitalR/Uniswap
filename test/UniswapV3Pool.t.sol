@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import { Test, stdError } from "forge-std/Test.sol";
+import { Test, stdError, console2 } from "forge-std/Test.sol";
 
 import { UniswapV3Pool, IUniswapV3Pool, IERC20 } from "src/UniswapV3Pool.sol";
 import { UniswapV3Factory } from "src/UniswapV3Factory.sol";
 import { UniswapV3PoolUtils } from "test/utils/UniswapV3Pool.Utils.t.sol";
 import { ERC20Mock } from "test/mocks/ERC20Mock.sol";
-
-import "lib/forge-std/src/console2.sol";
 
 contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
     ERC20Mock weth;
@@ -618,11 +616,11 @@ contract UniswapV3PoolTest is Test, UniswapV3PoolUtils {
         }
     }
 
-    function uniswapV3FlashCallback(bytes calldata data) public {
+    function uniswapV3FlashCallback(uint256 fee0, uint256 fee1, bytes calldata data) public {
         (uint256 amount0, uint256 amount1) = abi.decode(data, (uint256, uint256));
 
-        if (amount0 > 0) weth.transfer(msg.sender, amount0);
-        if (amount1 > 0) usdc.transfer(msg.sender, amount1);
+        if (amount0 > 0) weth.transfer(msg.sender, amount0 + fee0);
+        if (amount1 > 0) usdc.transfer(msg.sender, amount1 + fee1);
 
         flashCallbackCalled = true;
     }

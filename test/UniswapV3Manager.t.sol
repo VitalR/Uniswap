@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import { Test, stdError } from "forge-std/Test.sol";
+import { Test, stdError, console2 } from "forge-std/Test.sol";
 
 import { UniswapV3Manager, IUniswapV3Manager } from "../src/UniswapV3Manager.sol";
 import { UniswapV3NFTManager } from "src/UniswapV3NFTManager.sol";
@@ -11,8 +11,6 @@ import { LiquidityMath } from "../src/libraries/LiquidityMath.sol";
 import { TickMath } from "../src/libraries/TickMath.sol";
 import { TestUtils } from "./utils/TestUtils.sol";
 import { ERC20Mock } from "./mocks/ERC20Mock.sol";
-
-import "lib/forge-std/src/console2.sol";
 
 contract UniswapV3ManagerTest is Test, TestUtils {
     ERC20Mock weth;
