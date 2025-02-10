@@ -245,7 +245,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
         uint128 amount0Requested,
         uint128 amount1Requested
     ) public returns (uint128 amount0, uint128 amount1) {
-        Position.Info memory position = positions.get(msg.sender, lowerTick, upperTick);
+        Position.Info storage position = positions.get(msg.sender, lowerTick, upperTick);
 
         amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
         amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
