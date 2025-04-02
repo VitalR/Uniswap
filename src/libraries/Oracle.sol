@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
 /// @title Oracle Library
 /// @notice Provides functions for managing and retrieving time-weighted average prices and tick data.
@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 library Oracle {
     // Define a custom error for the "OLD" condition
     error OldObservation();
-    
+
     /// @notice Represents an observation in the oracle.
     /// @param timestamp The timestamp of the observation.
     /// @param tickCumulative The cumulative sum of the ticks up to the timestamp.

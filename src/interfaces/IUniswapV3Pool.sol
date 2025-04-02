@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
 /// @notice Interface for a Uniswap V3 pool contract defining the core methods and events.
 /// @dev This interface outlines the essential functionalities of a Uniswap V3 pool, including managing liquidity,

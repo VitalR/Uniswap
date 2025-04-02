@@ -14,7 +14,7 @@ remappings = [
     "bytes-utils/=lib/solidity-bytes-utils/contracts/"
 ]
 
-solc = "0.8.25"
+solc = "0.8.29"
 optimizer = true
 optimizer_runs = 10000
 

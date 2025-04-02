@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
 /// @title IUniswapV3Manager
 /// @notice Interface for managing liquidity and performing swaps in Uniswap V3 pools.

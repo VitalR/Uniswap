@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
 /// @title IUniswapV3PoolDeployer
 /// @notice Interface for the Uniswap V3 pool deployer.

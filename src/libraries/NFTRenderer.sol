@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
 import { Base64 } from "@openzeppelin/utils/Base64.sol";
 import { Strings } from "@openzeppelin/utils/Strings.sol";
