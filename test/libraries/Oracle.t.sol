@@ -22,12 +22,14 @@ contract OracleTest is Test {
     }
 
     function testObserveSingleInPastOLD() public {
-        initialize(5, 2);
+        OracleHelper helper = new OracleHelper();
+
+        helper.initialize(5, 2);
         vm.warp(8);
 
-        // not earlier than secondsAgo
-        vm.expectRevert(bytes("OLD"));
-        observeSingle(4);
+        // Call the external contract – revert will now be at lower depth!
+        vm.expectRevert(Oracle.OldObservation.selector);
+        helper.observeSingle(blockTimestamp(), 4);
     }
 
     function testObserveSingleInPast() public {
@@ -158,5 +160,29 @@ contract OracleTest is Test {
 
     function blockTimestamp() internal view returns (uint32 timestamp) {
         timestamp = uint32(block.timestamp);
+    }
+}
+
+contract OracleHelper {
+    using Oracle for Oracle.Observation[65_535];
+
+    Oracle.Observation[65_535] public oracle;
+    int24 public tick;
+    uint16 public index;
+    uint16 public cardinality;
+    uint16 public cardinalityNext;
+
+    constructor() {
+        cardinality = 1;
+        cardinalityNext = 1;
+    }
+
+    function initialize(uint32 time, int24 _tick) external {
+        oracle[0] = Oracle.Observation({ timestamp: time, tickCumulative: 0, initialized: true });
+        tick = _tick;
+    }
+
+    function observeSingle(uint32 time, uint32 secondsAgo) external view returns (int56) {
+        return oracle.observeSingle(time, secondsAgo, tick, index, cardinality);
     }
 }

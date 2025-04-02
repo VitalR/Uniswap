@@ -5,6 +5,9 @@ pragma solidity 0.8.25;
 /// @notice Provides functions for managing and retrieving time-weighted average prices and tick data.
 /// @dev This library is used to record and query historical tick observations for Uniswap V3-style pools.
 library Oracle {
+    // Define a custom error for the "OLD" condition
+    error OldObservation();
+    
     /// @notice Represents an observation in the oracle.
     /// @param timestamp The timestamp of the observation.
     /// @param tickCumulative The cumulative sum of the ticks up to the timestamp.
@@ -101,8 +104,10 @@ library Oracle {
     /// @param b The second timestamp.
     /// @return True if `a` <= `b`, considering time overflow.
     function lte(uint32 time, uint32 a, uint32 b) private pure returns (bool) {
+        // Both timestamps are in the past (relative to time)
         if (a <= time && b <= time) return a <= b;
 
+        // Handle cases where timestamps wrap around uint32
         uint256 aAdjusted = a > time ? a : a + 2 ** 32;
         uint256 bAdjusted = b > time ? b : b + 2 ** 32;
 
@@ -184,14 +189,17 @@ library Oracle {
             }
         }
 
-        // If the target is before the last observation
+        // If the target is before the last observation, find the oldest observation
         beforeOrAt = self[(index + 1) % cardinality];
         if (!beforeOrAt.initialized) beforeOrAt = self[0];
 
-        // Ensure the target is within a valid range
-        require(lte(time, beforeOrAt.timestamp, target), "OLD");
+        // Ensure the target is within a valid range (not too old)
+        // require(lte(time, beforeOrAt.timestamp, target), "OLD");
+        if (!lte(time, beforeOrAt.timestamp, target)) {
+            revert OldObservation();
+        }
 
-        // Perform binary search to find surrounding observations
+        // Otherwise, perform binary search to find surrounding observations
         return binarySearch(self, time, target, index, cardinality);
     }
 
@@ -218,7 +226,7 @@ library Oracle {
         }
 
         uint32 target = time - secondsAgo;
-
+        
         (Observation memory beforeOrAt, Observation memory atOrAfter) =
             getSurroundingObservations(self, time, target, tick, index, cardinality);
 
