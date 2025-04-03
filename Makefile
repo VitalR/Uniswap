@@ -39,12 +39,12 @@ deploy-local: build
 	@echo "Checking if Anvil is running..."
 	@if ! lsof -Pi :8545 -sTCP:LISTEN -t >/dev/null ; then \
 		echo "Starting Anvil..." ; \
-		anvil --chain-id 1337 > /dev/null 2>&1 & \
+		anvil --chain-id 1337 --code-size-limit 999999 > /dev/null 2>&1 & \
 		echo "Waiting for Anvil to start..." ; \
 		sleep 2 ; \
 	fi
 	@echo "Deploying to local network..."
-	forge script scripts/UniswapV3Deployer.s.sol:UniswapV3Deployer --rpc-url ${DEPLOY_URL} --broadcast --private-key ${DEFAULT_ANVIL_KEY} -vvvv
+	forge script scripts/UniswapV3Deployer.s.sol:UniswapV3Deployer --rpc-url ${DEPLOY_URL} --broadcast --private-key ${DEFAULT_ANVIL_KEY} --skip-simulation --force -vvvv
 
 # Stop anvil local node
 stop-anvil:
